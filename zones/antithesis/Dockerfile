@@ -41,9 +41,9 @@ ARG COVERAGE_RUSTFLAGS="-Ccodegen-units=1 -Cpasses=sancov-module -Cllvm-args=-sa
 # The build platform's architecture (BuildKit sets it), so local arm64 builds stay native.
 ARG TARGETARCH
 
-RUN --mount=type=cache,target=/usr/local/cargo/registry,sharing=locked \
-    --mount=type=cache,target=/usr/local/cargo/git,sharing=locked \
-    --mount=type=cache,target=/app/target,sharing=locked \
+RUN --mount=type=cache,id=dist-cargo-registry,target=/usr/local/cargo/registry,sharing=locked \
+    --mount=type=cache,id=dist-cargo-git,target=/usr/local/cargo/git,sharing=locked \
+    --mount=type=cache,id=dist-target,target=/app/target,sharing=locked \
     case "${TARGETARCH}" in arm64) target=aarch64-unknown-linux-gnu ;; *) target=x86_64-unknown-linux-gnu ;; esac \
     && RUSTFLAGS="-C link-arg=-fuse-ld=mold ${COVERAGE_RUSTFLAGS}" \
     cargo build --locked --profile ${RUST_PROFILE} --target "$target" \
@@ -101,7 +101,7 @@ WORKDIR /app
 # this image has it, so no other container offers test commands. Build it with
 # --target workload.
 FROM runtime AS workload
-COPY --chmod=755 zones/antithesis/test/ /opt/antithesis/test/
+COPY --chmod=755 zones/antithesis/test/v1/zone_dist/ /opt/antithesis/test/v1/zone_dist/
 
 # The default target stays the image the nodes run.
 FROM runtime

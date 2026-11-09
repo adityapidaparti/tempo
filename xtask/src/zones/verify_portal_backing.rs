@@ -50,8 +50,51 @@ pub(crate) struct VerifyPortalBacking {
     zone_from_block: u64,
 }
 
+/// What [`VerifyPortalBacking::audit`] found.
+#[derive(Debug, serde::Serialize)]
+pub(crate) struct BackingAudit {
+    pub(crate) portal_balance: U256,
+    pub(crate) required_backing: U256,
+}
+
 impl VerifyPortalBacking {
+    /// Audits `portal`'s backing of `token` over both chains' full history.
+    pub(crate) fn new(
+        l1_rpc_url: String,
+        zone_rpc_url: String,
+        portal: Address,
+        token: Address,
+    ) -> Self {
+        Self {
+            l1_rpc_url,
+            zone_rpc_url,
+            portal,
+            token,
+            l1_from_block: 0,
+            zone_from_block: 0,
+        }
+    }
+
     pub(crate) async fn run(self) -> eyre::Result<()> {
+        let BackingAudit {
+            portal_balance,
+            required_backing,
+        } = self.audit().await?;
+        if portal_balance >= required_backing {
+            println!(
+                "  PASS: backing surplus    {}",
+                portal_balance - required_backing
+            );
+            Ok(())
+        } else {
+            let deficit = required_backing - portal_balance;
+            println!("  FAIL: backing deficit    {deficit}");
+            Err(eyre::eyre!("Portal is underbacked by {deficit} base units"))
+        }
+    }
+
+    /// Reads the portal balance and everything it must back, printing the breakdown.
+    pub(crate) async fn audit(&self) -> eyre::Result<BackingAudit> {
         let l1_rpc_url = normalize_http_rpc(&self.l1_rpc_url);
         let zone_rpc_url = normalize_http_rpc(&self.zone_rpc_url);
         let l1 = ProviderBuilder::new_with_network::<TempoNetwork>()
@@ -221,17 +264,10 @@ impl VerifyPortalBacking {
         println!("  Inbox refund liability:  {inbox_refunds}");
         println!("  Required backing:        {required_backing}");
 
-        if portal_balance >= required_backing {
-            println!(
-                "  PASS: backing surplus    {}",
-                portal_balance - required_backing
-            );
-            Ok(())
-        } else {
-            let deficit = required_backing - portal_balance;
-            println!("  FAIL: backing deficit    {deficit}");
-            Err(eyre::eyre!("Portal is underbacked by {deficit} base units"))
-        }
+        Ok(BackingAudit {
+            portal_balance,
+            required_backing,
+        })
     }
 }
 

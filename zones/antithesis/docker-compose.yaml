@@ -13,7 +13,7 @@
 # hostname, and init: true keeps the entrypoint off PID 1 so core dumps work.
 
 x-zone: &zone
-  image: ${ZONES_IMAGE:-tempo-zones-antithesis:latest}
+  image: ${ZONES_IMAGE:-tempo-zones-antithesis:dist}
   entrypoint: ["/opt/zones/zone-node.sh"]
   init: true
   healthcheck: &rpc-healthcheck
@@ -29,7 +29,7 @@ x-zone: &zone
 
 services:
   l1:
-    image: ${ZONES_IMAGE:-tempo-zones-antithesis:latest}
+    image: ${ZONES_IMAGE:-tempo-zones-antithesis:dist}
     container_name: l1
     hostname: l1
     init: true
@@ -79,7 +79,7 @@ services:
     restart: unless-stopped
 
   provision:
-    image: ${ZONES_IMAGE:-tempo-zones-antithesis:latest}
+    image: ${ZONES_IMAGE:-tempo-zones-antithesis:dist}
     container_name: provision
     hostname: provision
     init: true
@@ -143,7 +143,7 @@ services:
 
   workload:
     # The node image plus the test template; see the workload target in the Dockerfile.
-    image: ${WORKLOAD_IMAGE:-tempo-zones-antithesis-workload:latest}
+    image: ${WORKLOAD_IMAGE:-tempo-zones-antithesis-workload:dist}
     container_name: workload
     hostname: workload
     init: true

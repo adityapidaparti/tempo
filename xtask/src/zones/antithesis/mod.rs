@@ -35,6 +35,7 @@ use zone_precompiles::ecies::encrypt_deposit;
 use ledger::{Account, Lease, Ledger, Record};
 
 mod checks;
+mod dist;
 mod ledger;
 
 /// Dev accounts 8..=19 of the test mnemonic fund deposits. 0 administers the portal and 5..=7
@@ -113,6 +114,14 @@ enum Command {
     /// After a fault-free completion: `check-settled`, then each account's zone balance equals
     /// the transfers its zone logs record.
     CheckLedger,
+    /// Operator action: occasionally hands leadership to a random sequencer via `zone_setLeader`.
+    RotateLeader,
+    /// While faults run: no forks, settled blocks stay, settlements match the nodes.
+    CheckSafety,
+    /// After faults stop: nodes answer, a new batch settles in time, nodes converge, flows land.
+    CheckRecovery,
+    /// At the end: the portal's escrow covers zone supply and pending flows.
+    CheckBacking,
 }
 
 impl Antithesis {
@@ -124,6 +133,10 @@ impl Antithesis {
             Command::CheckConsistency => return ctx.check_consistency().await,
             Command::CheckSettled => return ctx.check_settled().await,
             Command::CheckLedger => return ctx.check_ledger().await,
+            Command::CheckSafety => return ctx.check_safety().await,
+            Command::CheckRecovery => return ctx.check_recovery().await,
+            Command::CheckBacking => return ctx.check_backing().await,
+            Command::RotateLeader => ctx.rotate_leader().await,
             Command::Deposit => ctx.deposit().await,
             Command::Transfer => ctx.transfer().await,
             Command::Withdraw => ctx.withdraw().await,
@@ -145,6 +158,7 @@ impl Antithesis {
 /// Connections and state every command uses.
 struct Context {
     ledger: Ledger,
+    state_dir: PathBuf,
     http: reqwest::Client,
     l1_url: reqwest::Url,
     l1: DynProvider,
@@ -172,6 +186,7 @@ impl Context {
         };
         Ok(Self {
             ledger: Ledger::open(&args.state_dir)?,
+            state_dir: args.state_dir.clone(),
             l1: connect(&args.l1_rpc_url),
             zones: args.zone_rpc_urls.iter().map(connect).collect(),
             l1_url: args.l1_rpc_url.clone(),
@@ -284,10 +299,21 @@ impl Context {
             return Ok(());
         };
         let (to, new_recipient) = self.pick_recipient(sender.address())?;
-        let amount = random_between(1, balance / 4);
         let url = &self.zone_urls[node];
         let zone = self.wallet(&sender, url);
         let gas_price = zone.get_gas_price().await?;
+        // The fee comes out of the same pathUSD balance, so a funded transfer needs both.
+        let max_fee: u128 = calc_gas_balance_spending(TIP20_TX_GAS, gas_price).try_into()?;
+        // A quarter of transfers drain the sender down to what the fee may need.
+        let drain = random_below(4) == 0;
+        let amount = if drain {
+            balance.saturating_sub(max_fee)
+        } else {
+            random_between(1, balance / 4)
+        };
+        if amount == 0 {
+            return Ok(());
+        }
         let receipt = ITIP20::new(PATH_USD_ADDRESS, &zone)
             .transfer(to, U256::from(amount))
             .gas(TIP20_TX_GAS)
@@ -303,9 +329,8 @@ impl Context {
             "to": to,
             "amount": amount.to_string(),
             "balance": balance.to_string(),
+            "drain": drain,
         });
-        // The fee comes out of the same pathUSD balance, so a funded transfer needs both.
-        let max_fee: u128 = calc_gas_balance_spending(TIP20_TX_GAS, gas_price).try_into()?;
         let funded_revert = !receipt.status()
             && self
                 .covered_before(&zone, &receipt, sender.address(), amount + max_fee)
@@ -342,6 +367,7 @@ impl Context {
             "Transfer creates a new zone account",
             &details
         );
+        assert_sometimes!(drain, "Transfer drains the sender", &details);
         println!("transfer: {amount} {} -> {to}", sender.address());
         Ok(())
     }
