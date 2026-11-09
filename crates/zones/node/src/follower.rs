@@ -7,7 +7,7 @@ use alloy_rlp::Decodable as _;
 use alloy_rpc_types_engine::ForkchoiceState;
 use alloy_sol_types::SolCall as _;
 #[cfg(feature = "fuzz")]
-use antithesis_sdk::assert_always;
+use antithesis_sdk::{assert_always, assert_sometimes, assert_unreachable};
 use eyre::{OptionExt as _, WrapErr as _};
 use reth_node_api::{ConsensusEngineHandle, PayloadTypes as _};
 use reth_primitives_traits::{SealedBlock, SealedHeader};
@@ -323,7 +323,15 @@ where
                         P2pEvent::SettlementProposalReceived { leader, proposal } => {
                             match self.handle_settlement_proposal(&leader, proposal).await {
                                 Ok(height) => info!(target: "zone::p2p", %leader, height, "Signed settlement proposal"),
-                                Err(err) => tracing::warn!(target: "zone::p2p", %leader, %err, "Rejected settlement proposal"),
+                                Err(err) => {
+                                    #[cfg(feature = "fuzz")]
+                                    assert_sometimes!(
+                                        true,
+                                        "Follower rejects a settlement proposal",
+                                        &json!({ "leader": leader.to_string(), "error": format!("{err:#}") })
+                                    );
+                                    tracing::warn!(target: "zone::p2p", %leader, %err, "Rejected settlement proposal")
+                                }
                             }
                         }
                         P2pEvent::BlockReceived { leader_ed25519_public_key, block } => {
@@ -436,6 +444,12 @@ where
         )
         .await?
         .ok_or_eyre("proposed block is not a batch boundary")?;
+        #[cfg(feature = "fuzz")]
+        assert_always!(
+            proposal == expected,
+            "Leader settlement proposal matches the follower's state",
+            &json!({ "height": height, "leader": leader.to_string() })
+        );
         eyre::ensure!(
             proposal == expected,
             "settlement proposal does not match follower state"
@@ -572,6 +586,16 @@ where
                 debug!(target: "zone::p2p", block_number, ?hash, "Ignoring duplicate peer block");
                 return Ok(PeerBlockImportOutcome::Imported);
             }
+            #[cfg(feature = "fuzz")]
+            assert_unreachable!(
+                "Follower receives a block that conflicts with its canonical chain",
+                &json!({
+                    "block_number": block_number,
+                    "local": existing.hash(),
+                    "received": hash,
+                    "live_sender": peer_block.live_sender.as_ref().map(ToString::to_string),
+                })
+            );
             eyre::bail!(
                 "peer block conflicts with canonical block at height {block_number}: local={}, received={hash}",
                 existing.hash()

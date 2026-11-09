@@ -37,6 +37,13 @@ const LAG_BLOCKS: u64 = 40;
 const SETTLED_SAMPLE: usize = 4;
 /// Random heights below the common head the safety check compares per run.
 const FORK_SAMPLE: usize = 3;
+/// New heights the safety check reads from each node per run, so every height a node serves is
+/// compared, not only a sample.
+const SCAN_BLOCKS: u64 = 48;
+/// The safety check re-reads random heights this far below a node's head for replaced blocks.
+const RECENT_BLOCKS: u64 = 200;
+/// Entries kept in the first-seen map before the lowest heights are dropped.
+const SEEN_LIMIT: usize = 20_000;
 /// Blocks per `eth_getLogs` request when scanning L1 for settlements.
 const LOG_CHUNK: u64 = 5_000;
 /// How long the recovery check waits for every zone node and L1 to answer once faults stop.
@@ -76,6 +83,15 @@ struct NodeObserved {
     recovered_at_settled: Option<u64>,
     /// The highest head of any node when this one was found lagging.
     behind_target: Option<u64>,
+    /// Highest height whose block the safety check has read from this node.
+    #[serde(default)]
+    scanned: u64,
+    /// Settled height when the node was first found unreachable in the current outage.
+    #[serde(default)]
+    down_at_settled: Option<u64>,
+    /// The node has reported the leader role.
+    #[serde(default)]
+    led: bool,
 }
 
 /// Holds the exclusive lock on the observations while a safety check runs.
@@ -122,38 +138,73 @@ impl ObservedFile {
 impl Context {
     /// Operator action: occasionally, at a random moment, asks a random sequencer to hand
     /// leadership to a random registered sequencer, the way an operator calls `zone_setLeader`.
+    /// One run in four sends two or three such requests back to back through different
+    /// sequencers, as two operators (or a retrying script) would.
     pub(super) async fn rotate_leader(&self) -> eyre::Result<()> {
-        if random_below(2) == 0 {
-            return Ok(());
-        }
+        let requests = match random_below(4) {
+            0 => return Ok(()),
+            1 | 2 => 1,
+            _ => 2 + random_below(2),
+        };
         tokio::time::sleep(Duration::from_millis(random_below(20_000))).await;
         let portal = ZonePortal::new(self.portal, &self.l1);
         let count: u64 = portal.sequencerCount().call().await?.try_into()?;
-        let target = portal
-            .sequencerAt(U256::from(random_below(count)))
-            .call()
-            .await?;
-        let relay = random_index(QUORUM.min(self.zone_urls.len()));
+        let mut calls = Vec::new();
+        for _ in 0..requests {
+            let target = portal
+                .sequencerAt(U256::from(random_below(count)))
+                .call()
+                .await?;
+            let relay = random_index(QUORUM.min(self.zone_urls.len()));
+            let delay = Duration::from_millis(random_below(3_000));
+            calls.push(async move {
+                if requests > 1 {
+                    tokio::time::sleep(delay).await;
+                }
+                (relay, target, self.set_leader(relay, target).await)
+            });
+        }
+        let mut submitted = 0;
+        for (relay, target, response) in futures::future::join_all(calls).await {
+            let url = self.zone_urls[relay].as_str();
+            match response {
+                Ok(response) => {
+                    let rotated = response["status"].as_str() == Some("submitted");
+                    submitted += u64::from(rotated);
+                    assert_sometimes!(
+                        rotated,
+                        "Operator rotates the zone leader",
+                        &json!({ "relay": url, "response": response })
+                    );
+                    println!("rotate-leader: via {url} to {target}: {response}");
+                }
+                // A request can lose the epoch race to another one, or hit a faulted node.
+                Err(error) => println!("rotate-leader: via {url} to {target} failed: {error:#}"),
+            }
+        }
+        assert_sometimes!(
+            submitted > 1,
+            "Operator rotates the zone leader twice back to back",
+            &json!({ "requests": requests, "submitted": submitted })
+        );
+        Ok(())
+    }
+
+    /// Calls `zone_setLeader(target)` on the sequencer at `relay`.
+    async fn set_leader(
+        &self,
+        relay: usize,
+        target: alloy::primitives::Address,
+    ) -> eyre::Result<serde_json::Value> {
         let client = reqwest::Client::builder()
             .timeout(SET_LEADER_TIMEOUT)
             .build()?;
         let node = ProviderBuilder::new()
             .connect_reqwest(client, self.zone_urls[relay].clone())
             .erased();
-        let response: serde_json::Value = node
+        Ok(node
             .raw_request("zone_setLeader".into(), (target,))
-            .await?;
-        let rotated = response["status"].as_str() == Some("submitted");
-        assert_sometimes!(
-            rotated,
-            "Operator rotates the zone leader",
-            &json!({ "relay": self.zone_urls[relay].as_str(), "response": response })
-        );
-        println!(
-            "rotate-leader: via {} to {target}: {response}",
-            self.zone_urls[relay]
-        );
-        Ok(())
+            .await?)
     }
 
     /// S1 no forks, S2 settled finality, S3 settlement validity, plus coverage bookkeeping.
@@ -189,29 +240,37 @@ impl Context {
         self.observe_nodes(&mut observed, &heads, max_head, latest_settled);
         self.observe_leader(&mut observed, latest_settled).await;
 
-        // S1: every node holding a height holds the same block there, now and as first seen.
-        if let Some(common) = heads.iter().flatten().copied().min() {
-            let mut heights: BTreeSet<u64> = (0..FORK_SAMPLE)
-                .map(|_| 1 + random_below(common.max(1)))
-                .collect();
-            heights.insert(common);
-            for height in heights.into_iter().filter(|height| *height > 0) {
-                let hashes = self.hashes_at(&heads, height).await;
-                let Some(&(_, first)) = hashes.first() else {
-                    continue;
-                };
-                let earlier = observed.seen.get(&height).copied();
-                let agree = hashes.iter().all(|(_, hash)| *hash == first)
-                    && earlier.is_none_or(|earlier| earlier == first);
-                assert_always!(
-                    agree,
-                    "No forks: zone nodes never hold different blocks at the same height",
-                    &json!({ "height": height, "hashes": hashes, "first_seen": earlier })
-                );
-                if agree {
-                    observed.seen.entry(height).or_insert(first);
-                }
+        self.observe_roles(&mut observed).await;
+
+        // S1: every node holding a height holds the same block there, and the block first seen
+        // at a height is never replaced. Reads every height a node has added since the last
+        // run (up to SCAN_BLOCKS), plus a few random earlier ones.
+        let blocks = self.scan_blocks(&mut observed, &heads).await;
+        for (height, hashes) in blocks {
+            let Some(&(_, first)) = hashes.first() else {
+                continue;
+            };
+            let agree = hashes.iter().all(|(_, hash)| *hash == first);
+            assert_always!(
+                agree,
+                "No forks: zone nodes never hold different blocks at the same height",
+                &json!({ "height": height, "hashes": hashes })
+            );
+            let earlier = observed.seen.get(&height).copied();
+            let kept = hashes
+                .iter()
+                .all(|(_, hash)| earlier.is_none_or(|earlier| earlier == *hash));
+            assert_always!(
+                kept,
+                "A block a zone node served is never replaced by another at its height",
+                &json!({ "height": height, "hashes": hashes, "first_seen": earlier })
+            );
+            if agree && kept {
+                observed.seen.entry(height).or_insert(first);
             }
+        }
+        while observed.seen.len() > SEEN_LIMIT {
+            observed.seen.pop_first();
         }
 
         // S3: each newly settled batch matches the block every node that passed it holds.
@@ -331,21 +390,105 @@ impl Context {
         }
     }
 
-    /// The block hash each reachable node holds at `height`, skipping nodes below it.
-    async fn hashes_at(&self, heads: &[Option<u64>], height: u64) -> Vec<(String, B256)> {
-        let mut hashes = Vec::new();
+    /// Reads, from every reachable node, the blocks it added since the last run (at most
+    /// [`SCAN_BLOCKS`]) and [`FORK_SAMPLE`] random heights among its last [`RECENT_BLOCKS`].
+    /// Returns the hashes found per height.
+    async fn scan_blocks(
+        &self,
+        observed: &mut Observed,
+        heads: &[Option<u64>],
+    ) -> BTreeMap<u64, Vec<(String, B256)>> {
+        let mut blocks: BTreeMap<u64, Vec<(String, B256)>> = BTreeMap::new();
         for ((url, zone), head) in self.zone_urls.iter().zip(&self.zones).zip(heads) {
-            if !head.is_some_and(|head| head >= height) {
+            let Some(head) = *head else {
                 continue;
+            };
+            let node = observed.nodes.entry(url.to_string()).or_default();
+            // A head below the scanned height is re-read from there: its blocks changed.
+            let from = node.scanned.min(head);
+            let to = head.min(from + SCAN_BLOCKS);
+            let mut heights: BTreeSet<u64> = (from + 1..=to).collect();
+            for _ in 0..FORK_SAMPLE {
+                let back = random_below(RECENT_BLOCKS.min(head.max(1)));
+                heights.insert(head.saturating_sub(back).max(1));
             }
-            if let Ok(Some(block)) = zone
-                .get_block_by_number(BlockNumberOrTag::Number(height))
-                .await
-            {
-                hashes.push((url.to_string(), block.header.hash));
+            let read = futures::future::join_all(heights.iter().map(async |&height| {
+                let block = zone
+                    .get_block_by_number(BlockNumberOrTag::Number(height))
+                    .await;
+                (height, block)
+            }))
+            .await;
+            let mut complete = true;
+            for (height, block) in read {
+                match block {
+                    Ok(Some(block)) => blocks
+                        .entry(height)
+                        .or_default()
+                        .push((url.to_string(), block.header.hash)),
+                    // An error or a block gone since the head was read: scan it again next run.
+                    _ => complete &= height > to,
+                }
+            }
+            if complete {
+                node.scanned = to;
             }
         }
-        hashes
+        blocks
+    }
+
+    /// Reads each node's role from `zone_getSequencerInfo` for the leadership coverage
+    /// signals. Roles are read at slightly different moments and a demoting leader reports
+    /// its role until its tasks stop, so two leaders here are a signal, not a violation.
+    async fn observe_roles(&self, observed: &mut Observed) {
+        let roles = self.roles().await;
+        let leaders: Vec<&str> = roles
+            .iter()
+            .filter(|(_, role)| role.as_deref() == Some("leader"))
+            .map(|(url, _)| url.as_str())
+            .collect();
+        for url in &leaders {
+            observed.nodes.entry((*url).to_owned()).or_default().led = true;
+        }
+        let details = json!({ "roles": roles });
+        assert_sometimes!(
+            leaders.len() > 1,
+            "Two zone nodes report the leader role at once",
+            &details
+        );
+        assert_sometimes!(
+            leaders.is_empty() && roles.iter().take(QUORUM).all(|(_, role)| role.is_some()),
+            "No sequencer reports the leader role while all three answer",
+            &details
+        );
+        assert_sometimes!(
+            roles.iter().any(|(_, role)| role.as_deref() == Some("fenced")),
+            "A zone node reports the fenced role",
+            &details
+        );
+        assert_sometimes!(
+            self.zone_urls
+                .iter()
+                .take(QUORUM)
+                .all(|url| observed.nodes.get(url.as_str()).is_some_and(|node| node.led)),
+            "Every sequencer has led the zone",
+            &details
+        );
+    }
+
+    /// Each node's URL and its role per `zone_getSequencerInfo`, `None` if it did not answer.
+    async fn roles(&self) -> Vec<(String, Option<String>)> {
+        futures::future::join_all(self.zone_urls.iter().zip(&self.zones).map(
+            async |(url, zone)| {
+                let info: Option<serde_json::Value> = zone
+                    .raw_request("zone_getSequencerInfo".into(), [(); 0])
+                    .await
+                    .ok();
+                let role = info.and_then(|info| info["local"]["role"].as_str().map(str::to_owned));
+                (url.to_string(), role)
+            },
+        ))
+        .await
     }
 
     /// Per-node bookkeeping: outages, lag, and heads falling back below a settled height.
@@ -356,12 +499,21 @@ impl Context {
         max_head: u64,
         latest_settled: u64,
     ) {
-        for (url, head) in self.zone_urls.iter().zip(heads) {
+        for (index, (url, head)) in self.zone_urls.iter().zip(heads).enumerate() {
             let node = observed.nodes.entry(url.to_string()).or_default();
             let Some(head) = *head else {
                 node.down = true;
+                let since = *node.down_at_settled.get_or_insert(latest_settled);
+                if index < QUORUM && latest_settled > since {
+                    assert_sometimes!(
+                        true,
+                        "A batch settles while a sequencer is unreachable",
+                        &json!({ "node": url.as_str(), "down_at": since, "settled": latest_settled })
+                    );
+                }
                 continue;
             };
+            node.down_at_settled = None;
             if node.down {
                 node.down = false;
                 node.recovered_at_settled = Some(latest_settled);
@@ -490,7 +642,53 @@ impl Context {
             &details
         );
         println!("check-recovery: {details}");
+        self.check_one_leader().await?;
         self.check_settled().await
+    }
+
+    /// After faults stop: the sequencer the portal names leader reports the leader role, and
+    /// every other node follows. Retried, since a handoff may still be in progress.
+    async fn check_one_leader(&self) -> eyre::Result<()> {
+        let portal = ZonePortal::new(self.portal, &self.l1);
+        let mut last = json!(null);
+        let agreed = poll_until(BATCH_DEADLINE, async || {
+            let leader = portal.leader().call().await?;
+            let infos: Vec<serde_json::Value> =
+                futures::future::try_join_all(self.zones.iter().map(async |zone| {
+                    zone.raw_request::<_, serde_json::Value>("zone_getSequencerInfo".into(), [(); 0])
+                        .await
+                }))
+                .await?;
+            let views: Vec<serde_json::Value> = infos
+                .iter()
+                .map(|info| {
+                    json!({
+                        "name": info["local"]["name"],
+                        "address": info["local"]["sequencerAddress"],
+                        "role": info["local"]["role"],
+                    })
+                })
+                .collect();
+            let leader_text = json!(leader);
+            let agreed = views.iter().all(|view| {
+                let expected = if view["address"] == leader_text {
+                    "leader"
+                } else {
+                    "follower"
+                };
+                view["role"].as_str() == Some(expected)
+            });
+            last = json!({ "portal_leader": leader, "nodes": views });
+            Ok(agreed)
+        })
+        .await?;
+        assert_always!(
+            agreed,
+            "After faults stop, the portal's leader leads and every other node follows",
+            &last
+        );
+        println!("check-recovery: one leader: {agreed} {last}");
+        Ok(())
     }
 
     /// M2: at the end, the portal's escrow covers zone supply plus every pending flow, per

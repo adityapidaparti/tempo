@@ -15,6 +15,8 @@
 use std::{sync::Arc, time::Duration};
 
 use alloy_primitives::Address;
+#[cfg(feature = "fuzz")]
+use antithesis_sdk::{assert_sometimes, assert_unreachable};
 use eyre::{OptionExt as _, WrapErr as _};
 use reth_chain_state::PersistedBlockSubscriptions;
 use reth_node_api::ConsensusEngineHandle;
@@ -23,6 +25,8 @@ use reth_primitives_traits::SealedHeader;
 use reth_provider::HeaderProvider;
 use reth_storage_api::{BlockNumReader, StateProviderFactory};
 use reth_transaction_pool::TransactionPool;
+#[cfg(feature = "fuzz")]
+use serde_json::json;
 use tempo_primitives::TempoHeader;
 use tokio::{
     sync::{mpsc, oneshot},
@@ -493,6 +497,11 @@ async fn stop_current_generation(
         && generation.stop(sinks).await == GenerationStopOutcome::Failed
     {
         error!(target: "zone::role", "Role controller exiting after an unproven generation teardown");
+        #[cfg(feature = "fuzz")]
+        assert_unreachable!(
+            "Role controller exits after an unproven generation teardown",
+            &json!({})
+        );
         return false;
     }
 
@@ -697,6 +706,20 @@ pub(crate) async fn run_role_controller<P, Pool>(
             generation_id += 1;
             match start_generation(&context, &sinks, desired, generation_id).await {
                 Ok(generation) => {
+                    #[cfg(feature = "fuzz")]
+                    {
+                        let details = json!({ "generation": generation_id, "role": desired.name(), "epoch": desired.epoch() });
+                        assert_sometimes!(
+                            generation_id > 1 && matches!(desired, DesiredRole::Leader { .. }),
+                            "Zone node is promoted to leader after its first role generation",
+                            &details
+                        );
+                        assert_sometimes!(
+                            generation_id > 1 && matches!(desired, DesiredRole::Follower { .. }),
+                            "Zone node starts following after its first role generation",
+                            &details
+                        );
+                    }
                     current = Some(generation);
                 }
                 Err(err) => {
@@ -788,6 +811,12 @@ pub(crate) async fn run_role_controller<P, Pool>(
                             epoch,
                             "Engine halted at the activation boundary; demoting"
                         );
+                        #[cfg(feature = "fuzz")]
+                        assert_sometimes!(
+                            true,
+                            "Leader engine halts at the activation boundary and demotes",
+                            &json!({ "tempo_anchor": tempo_anchor, "epoch": epoch })
+                        );
                         // Stop here rather than letting the next iteration notice the role
                         // change, so the broadcaster drains this leader's final blocks before
                         // the successor starts producing.
@@ -802,6 +831,11 @@ pub(crate) async fn run_role_controller<P, Pool>(
                             tempo_anchor,
                             "Engine fenced on an ungoverned anchor"
                         );
+                        #[cfg(feature = "fuzz")]
+                        assert_unreachable!(
+                            "Leader engine fences on an ungoverned anchor",
+                            &json!({ "tempo_anchor": tempo_anchor })
+                        );
                         if !stop_current_generation(&mut current, &sinks).await {
                             return;
                         }
@@ -813,6 +847,12 @@ pub(crate) async fn run_role_controller<P, Pool>(
                         // A generation task ended while its generation is still desired:
                         // restart the whole generation to keep the task graph coherent.
                         error!(target: "zone::role", task = name, "Generation task ended unexpectedly; restarting generation");
+                        #[cfg(feature = "fuzz")]
+                        assert_sometimes!(
+                            true,
+                            "Role generation restarts after one of its tasks ends",
+                            &json!({ "task": name, "generation": generation_id })
+                        );
                         if !stop_current_generation(&mut current, &sinks).await {
                             return;
                         }
@@ -820,6 +860,11 @@ pub(crate) async fn run_role_controller<P, Pool>(
                     }
                     Some(Err(err)) => {
                         error!(target: "zone::role", %err, "Generation task panicked; restarting generation");
+                        #[cfg(feature = "fuzz")]
+                        assert_unreachable!(
+                            "Role generation task panics",
+                            &json!({ "error": err.to_string(), "generation": generation_id })
+                        );
                         if !stop_current_generation(&mut current, &sinks).await {
                             return;
                         }
