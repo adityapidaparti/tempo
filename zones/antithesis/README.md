@@ -79,6 +79,31 @@ sequencer, as an operator would. Checks:
 | `eventually_recovery` (`check-recovery`) | every node answers within 180 s; the chain advances and a new batch settles within 180 s (normal: one batch of 20 blocks every ~10 s locally, so 18x); then `check-settled` (convergence, deposits credited, withdrawals paid) |
 | `finally_backing` (`check-backing`) | `verify-portal-backing`: portal escrow covers zone supply plus pending flows |
 
+On the `quorum-local` branch the template also covers the sequencer quorum more closely:
+
+- `check-safety` reads every block a node added since the last run (not a sample) and asserts
+  two properties separately: nodes never hold different blocks at one height, and a block a node
+  served is never replaced. It also reads each node's role from `zone_getSequencerInfo` for
+  coverage signals (two leaders at once, no leader, a fenced node, every sequencer has led, a
+  batch settling while a sequencer is unreachable).
+- `rotate-leader` sends two or three `zone_setLeader` requests back to back through different
+  sequencers in a quarter of its runs.
+- `check-recovery` also asserts that the portal's leader reports the leader role and every
+  other node follows.
+- The node carries assertions (feature `fuzz`) in `role.rs` and `follower.rs`: the role
+  controller exiting after an unproven teardown, a role task panicking, the leader engine
+  fencing, a follower receiving a block that conflicts with its chain, and a leader's settlement
+  proposal differing from the follower's state.
+
+Launch (HA faults, `l1` and `workload` excluded from faults):
+
+```bash
+SNOUTY_UNSTABLE_FEATURES=teams snouty launch --launcher basic_test --config zones/antithesis \
+    --max-compute-hours 36 --fault-tolerance high_availability \
+    --fault-exclusions '^(workload|l1|provision)$' \
+    --filter-logs-matching ' INFO reth_node_events::node'
+```
+
 `check-safety` keeps L1 settlements, sampled block hashes and per-node state in
 `/state/dist.json`, and skips unreachable nodes and RPC errors.
 
