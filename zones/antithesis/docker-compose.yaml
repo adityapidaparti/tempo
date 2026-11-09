@@ -101,6 +101,7 @@ services:
     volumes:
       - shared:/shared:ro
       - zone-0-data:/data
+      - control:/control:ro
     networks:
       zones:
         ipv4_address: 10.20.0.11
@@ -113,6 +114,7 @@ services:
     volumes:
       - shared:/shared:ro
       - zone-1-data:/data
+      - control:/control:ro
     networks:
       zones:
         ipv4_address: 10.20.0.12
@@ -125,6 +127,7 @@ services:
     volumes:
       - shared:/shared:ro
       - zone-2-data:/data
+      - control:/control:ro
     networks:
       zones:
         ipv4_address: 10.20.0.13
@@ -137,6 +140,7 @@ services:
     volumes:
       - shared:/shared:ro
       - zone-rpc-data:/data
+      - control:/control:ro
     networks:
       zones:
         ipv4_address: 10.20.0.20
@@ -154,12 +158,15 @@ services:
     volumes:
       - shared:/shared:ro
       - workload-state:/state
+      - control:/control
     networks:
       zones:
         ipv4_address: 10.20.0.30
 
 volumes:
   shared:
+  # The operator's forced-recovery directive, written by the workload and read by the nodes.
+  control:
   l1-data:
   zone-0-data:
   zone-1-data:

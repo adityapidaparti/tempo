@@ -87,6 +87,10 @@ pub(crate) struct Antithesis {
     #[arg(long, env = "ZONE_JSON", default_value = "/shared/zone.json")]
     zone_json: PathBuf,
 
+    /// Directory the zone nodes read the operator's forced-recovery directive from.
+    #[arg(long, env = "CONTROL_DIR", default_value = "/control")]
+    control_dir: PathBuf,
+
     /// Directory holding the workload ledger and account leases.
     #[arg(long, env = "WORKLOAD_STATE_DIR", default_value = "/state")]
     state_dir: PathBuf,
@@ -116,6 +120,8 @@ enum Command {
     CheckLedger,
     /// Operator action: occasionally hands leadership to a random sequencer via `zone_setLeader`.
     RotateLeader,
+    /// Operator action: when the leader stops answering, forces recovery onto a survivor.
+    ForceRecovery,
     /// While faults run: no forks, settled blocks stay, settlements match the nodes.
     CheckSafety,
     /// After faults stop: nodes answer, a new batch settles in time, nodes converge, flows land.
@@ -137,6 +143,7 @@ impl Antithesis {
             Command::CheckRecovery => return ctx.check_recovery().await,
             Command::CheckBacking => return ctx.check_backing().await,
             Command::RotateLeader => ctx.rotate_leader().await,
+            Command::ForceRecovery => ctx.force_recovery().await,
             Command::Deposit => ctx.deposit().await,
             Command::Transfer => ctx.transfer().await,
             Command::Withdraw => ctx.withdraw().await,
@@ -159,6 +166,7 @@ impl Antithesis {
 struct Context {
     ledger: Ledger,
     state_dir: PathBuf,
+    control_dir: PathBuf,
     http: reqwest::Client,
     l1_url: reqwest::Url,
     l1: DynProvider,
@@ -187,6 +195,7 @@ impl Context {
         Ok(Self {
             ledger: Ledger::open(&args.state_dir)?,
             state_dir: args.state_dir.clone(),
+            control_dir: args.control_dir.clone(),
             l1: connect(&args.l1_rpc_url),
             zones: args.zone_rpc_urls.iter().map(connect).collect(),
             l1_url: args.l1_rpc_url.clone(),
