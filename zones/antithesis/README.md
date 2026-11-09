@@ -81,3 +81,8 @@ sequencer, as an operator would. Checks:
 
 `check-safety` keeps L1 settlements, sampled block hashes and per-node state in
 `/state/dist.json`, and skips unreachable nodes and RPC errors.
+
+Exclude `l1` from container stop/kill faults (`custom.container_status_fault_exclusions=workload,l1`):
+the dev-mode L1 loses its unpersisted tip when killed and re-mines different blocks at those
+heights, which the zone nodes had already taken as final, so the zone halts for good. Real Tempo
+finality cannot do that, so it would only produce false recovery failures.
