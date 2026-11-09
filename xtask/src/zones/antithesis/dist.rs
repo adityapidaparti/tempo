@@ -42,8 +42,8 @@ const LOG_CHUNK: u64 = 5_000;
 /// How long the recovery check waits for every zone node and L1 to answer once faults stop.
 const NODES_UP_TIMEOUT: Duration = Duration::from_secs(180);
 /// How long the recovery check gives the zone to settle a new batch once every node answers.
-/// A batch is 20 zone blocks; fault-free runs settle one every ~12 s (see the README), so this
-/// is 15x normal, leaving room for a new leader to catch up and the quorum to reconnect.
+/// A batch is 20 zone blocks; fault-free runs settle one every ~10 s (2 zone blocks/s), so this
+/// is 18x normal, leaving room for a new leader to catch up and the quorum to reconnect.
 const BATCH_DEADLINE: Duration = Duration::from_secs(180);
 /// How long the backing check retries before judging a deficit or an audit error.
 const BACKING_TIMEOUT: Duration = Duration::from_secs(180);
@@ -178,10 +178,13 @@ impl Context {
             .last_key_value()
             .map_or(0, |(height, _)| *height);
 
-        let mut heads = Vec::with_capacity(self.zones.len());
-        for zone in &self.zones {
-            heads.push(zone.get_block_number().await.ok());
-        }
+        // Read concurrently, so a node timing out does not skew the others' heads.
+        let heads: Vec<Option<u64>> = futures::future::join_all(
+            self.zones
+                .iter()
+                .map(async |zone| zone.get_block_number().await.ok()),
+        )
+        .await;
         let max_head = heads.iter().flatten().copied().max().unwrap_or_default();
         self.observe_nodes(&mut observed, &heads, max_head, latest_settled);
         self.observe_leader(&mut observed, latest_settled).await;

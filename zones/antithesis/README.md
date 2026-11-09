@@ -76,7 +76,7 @@ sequencer, as an operator would. Checks:
 | Command | Property |
 |---|---|
 | `anytime_safety` (`check-safety`) | S1 nodes never hold different blocks at one height (now, or versus the first hash seen); S2 a settled block never disappears from a node that passed it, and no node's head falls back below a settled height; S3 every newly settled batch matches the block of every node that passed it |
-| `eventually_recovery` (`check-recovery`) | every node answers within 180 s; the chain advances and a new batch settles within 180 s (normal: one batch of 20 blocks every ~12 s, so 15x); then `check-settled` (convergence, deposits credited, withdrawals paid) |
+| `eventually_recovery` (`check-recovery`) | every node answers within 180 s; the chain advances and a new batch settles within 180 s (normal: one batch of 20 blocks every ~10 s locally, so 18x); then `check-settled` (convergence, deposits credited, withdrawals paid) |
 | `finally_backing` (`check-backing`) | `verify-portal-backing`: portal escrow covers zone supply plus pending flows |
 
 `check-safety` keeps L1 settlements, sampled block hashes and per-node state in
