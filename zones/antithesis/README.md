@@ -95,6 +95,14 @@ On the `quorum-local` branch the template also covers the sequencer quorum more 
   fencing, a follower receiving a block that conflicts with its chain, and a leader's settlement
   proposal differing from the follower's state.
 
+- `force-recovery` (`parallel_driver_force_recovery`) is the operator's crashed-leader runbook
+  from `crates/zones/p2p/README.md`: when the portal's leader does not answer and the two other
+  sequencers hold the same tip for 10 s, it writes a `[forced_recovery]` directive naming one
+  of them to the `control` volume. `zone-node.sh` supervises the node, appends the directive to
+  the manifest and restarts the node when it changes. Once the recovery leader extends the
+  chain, the operator calls `zone_setLeader` for it to return to the on-chain schedule;
+  `check-recovery` does the same if a recovery is still open.
+
 Launch (HA faults, `l1` and `workload` excluded from faults):
 
 ```bash
