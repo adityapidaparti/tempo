@@ -64,3 +64,20 @@ Run a command against the local stack the way the platform does:
 docker compose -f zones/antithesis/docker-compose.yaml exec workload \
     /opt/antithesis/test/v1/zone_payments/first_seed
 ```
+
+## `zone_dist` template
+
+A small distributed-systems template for the sequencer quorum, and the only one the workload
+image ships on this branch. Drivers are `seed`, `deposit`, `transfer` (a quarter of transfers
+drain the sender), `withdraw`, plus `rotate-leader`: half the time, after a random delay, a
+random sequencer is asked over `zone_setLeader` to hand leadership to a random registered
+sequencer, as an operator would. Checks:
+
+| Command | Property |
+|---|---|
+| `anytime_safety` (`check-safety`) | S1 nodes never hold different blocks at one height (now, or versus the first hash seen); S2 a settled block never disappears from a node that passed it, and no node's head falls back below a settled height; S3 every newly settled batch matches the block of every node that passed it |
+| `eventually_recovery` (`check-recovery`) | every node answers within 180 s; the chain advances and a new batch settles within 180 s (normal: one batch of 20 blocks every ~12 s, so 15x); then `check-settled` (convergence, deposits credited, withdrawals paid) |
+| `finally_backing` (`check-backing`) | `verify-portal-backing`: portal escrow covers zone supply plus pending flows |
+
+`check-safety` keeps L1 settlements, sampled block hashes and per-node state in
+`/state/dist.json`, and skips unreachable nodes and RPC errors.

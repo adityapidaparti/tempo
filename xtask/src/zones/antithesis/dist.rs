@@ -27,7 +27,7 @@ use tempo_contracts::zones::{BatchSubmitted, LegacyBatchSubmitted, ZonePortal};
 use tempo_precompiles::PATH_USD_ADDRESS;
 
 use super::{Context, is_rpc_error, poll_until, random_below, random_index, shuffled};
-use crate::zones::verify_portal_backing::VerifyPortalBacking;
+use crate::verify_portal_backing::VerifyPortalBacking;
 
 /// `zone_urls[..QUORUM]` are the sequencers zone-0..2; the rest are RPC followers.
 const QUORUM: usize = 3;
