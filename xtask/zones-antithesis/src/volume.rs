@@ -47,7 +47,7 @@ const PENDING_TXS: usize = 4;
 const BATCH_BASE_GAS: u64 = 100_000;
 const CALL_GAS: u64 = 200_000;
 /// Most transactions per instalment.
-const MAX_TXS: u128 = 16;
+const MAX_TXS: u128 = 48;
 /// Most base units a dust payment carries. Two of them stay within one byte (127).
 const DUST: u128 = 60;
 /// How long a cohort waits for its second instalment.

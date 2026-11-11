@@ -3,6 +3,7 @@
 #   asis: Tempo's template unchanged
 #   vol:  + parallel_driver_payroll (realistic volume, no mined keys)
 #   deep: + parallel_driver_deep (ACCELERATOR: mined deep-key menu)
+#   vol3: + parallel_driver_payroll, _b and _c (the same driver three times, so it runs more often)
 ARG BASE=tempo-zones-antithesis-workload:planted-all
 FROM ${BASE}
 ARG REMOVE
