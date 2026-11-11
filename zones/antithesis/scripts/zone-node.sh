@@ -109,7 +109,14 @@ while :; do
             kill -TERM "$CHILD" 2>/dev/null || true
             break
         fi
-        if [ -z "$STOPPING" ] && [ "$(recovery_stamp)" != "$STAMP" ]; then
+        NOW=$(recovery_stamp)
+        if [ "$NOW" = none ] && [ "$STAMP" != none ]; then
+            # The operator removed a completed directive from the manifest: nothing to restart
+            # for; the next start of this node runs without it.
+            echo "zone-node supervisor: forced-recovery directive removed"
+            STAMP=none
+        fi
+        if [ -z "$STOPPING" ] && [ "$NOW" != "$STAMP" ]; then
             echo "zone-node supervisor: forced-recovery directive changed, restarting the node"
             DIRECTIVE=1
             kill -TERM "$CHILD" 2>/dev/null || true

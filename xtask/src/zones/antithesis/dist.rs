@@ -280,6 +280,11 @@ impl Context {
         }
         // A stop left by an operator run that was cut short before it wrote a directive.
         self.clear_stops()?;
+        self.retire_directive().await?;
+        if self.control_dir.join("recovery.toml").exists() {
+            // The previous recovery is over on the portal but not yet on every sequencer.
+            return Ok(());
+        }
         let portal = ZonePortal::new(self.portal, &self.l1);
         let portal_leader = portal.leader().call().await?;
         let portal_epoch: u64 = portal.leaderEpoch().call().await?;
@@ -446,6 +451,54 @@ impl Context {
             directive.old_leader_index,
             directive.recovery_height + 1
         );
+    }
+
+    /// "Operators should still remove the directive from every manifest promptly": once the
+    /// portal transition that ended the recovery is active and every answering sequencer has
+    /// consumed its activation block, removes the directive. Nodes keep running; a node that
+    /// starts later, such as one that never held the recovery block and so cannot start with
+    /// the directive, then starts without it and catches up.
+    async fn retire_directive(&self) -> eyre::Result<()> {
+        let path = self.control_dir.join("recovery.toml");
+        if !path.exists() {
+            return Ok(());
+        }
+        let Some(directive) = self.recovery_directive()? else {
+            return Ok(());
+        };
+        let infos =
+            futures::future::join_all((0..QUORUM).map(|index| self.sequencer_info(index))).await;
+        let field = |info: &serde_json::Value, path: [&str; 2]| {
+            info[path[0]][path[1]]
+                .as_str()
+                .and_then(|hex| u64::from_str_radix(hex.trim_start_matches("0x"), 16).ok())
+        };
+        let mut answered = 0;
+        for info in infos.iter().flatten() {
+            let (Some(epoch), Some(activation), Some(consumed)) = (
+                field(info, ["activeLeader", "epoch"]),
+                field(info, ["activeLeader", "activationTempoBlock"]),
+                field(info, ["progress", "tempoBlockNumber"]),
+            ) else {
+                return Ok(());
+            };
+            if epoch <= directive.portal_epoch || consumed < activation {
+                return Ok(());
+            }
+            answered += 1;
+        }
+        // The recovery leader and at least one more sequencer are past the transition.
+        if answered < QUORUM - 1 {
+            return Ok(());
+        }
+        std::fs::remove_file(&path)?;
+        assert_sometimes!(
+            true,
+            "Operator removes the completed forced-recovery directive",
+            &json!({ "directive": directive, "sequencers_past_transition": answered })
+        );
+        println!("force-recovery: removed the completed directive");
+        Ok(())
     }
 
     /// Removes every operator stop, so stopped nodes start again.
@@ -941,6 +994,7 @@ impl Context {
                 println!("check-recovery: completing forced recovery: {response}");
                 return Ok(false);
             }
+            self.retire_directive().await?;
             let leader = portal.leader().call().await?;
             let infos: Vec<serde_json::Value> =
                 futures::future::try_join_all(self.zones.iter().map(async |zone| {
