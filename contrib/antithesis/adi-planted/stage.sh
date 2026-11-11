@@ -11,6 +11,7 @@ stage() { # name compose-dir env-lines...
     printf '%s\n' "$@" > "$dir/.env"
 }
 stage reth-state-root reth-state-root RETH_STATE_ROOT_IMAGE=tempo-reth-state-root-antithesis:planted
+stage reth-state-root-checks reth-state-root RETH_STATE_ROOT_IMAGE=tempo-reth-state-root-antithesis:planted-checks
 for variant in asis vol deep; do
     stage "zones-$variant" zones ZONES_IMAGE=tempo-zones-antithesis:planted \
         "WORKLOAD_IMAGE=tempo-zones-antithesis-workload:planted-$variant"

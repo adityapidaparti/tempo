@@ -420,7 +420,18 @@ impl Round {
             .into_iter()
             .map(|(address, slots)| ProofTarget { address, slots })
             .collect::<Vec<_>>();
-        self.engine.check_parent_view(&written, &updates, expected_root)?;
+        // A block's post state names the account of every storage change, as execution output
+        // does; the model's per-update deltas carry storage alone.
+        let mut block_updates = vec![HashedPostState::default()];
+        for target in &written {
+            if let Some(entry) = self.state.get(&target.address) {
+                block_updates[0]
+                    .accounts
+                    .insert(keccak256(target.address), Some(entry.account.to_owned()));
+            }
+        }
+        block_updates.extend(updates.iter().cloned());
+        self.engine.check_parent_view(&written, &block_updates, expected_root)?;
         let hash = self.engine.produce(&operations, bundle, updates, expected_root)?;
         // Publish the block only once the overlay manager can serve it.
         self.view
