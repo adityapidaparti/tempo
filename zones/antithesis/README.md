@@ -95,19 +95,32 @@ On the `quorum-local` branch the template also covers the sequencer quorum more 
   fencing, a follower receiving a block that conflicts with its chain, and a leader's settlement
   proposal differing from the follower's state.
 
-- `force-recovery` (`parallel_driver_force_recovery`) is the operator's crashed-leader runbook
-  from `crates/zones/p2p/README.md`: when the portal's leader does not answer and the two other
-  sequencers hold the same tip for 10 s, it writes a `[forced_recovery]` directive naming one
-  of them to the `control` volume. `zone-node.sh` supervises the node, appends the directive to
-  the manifest and restarts the node when it changes. Once the recovery leader extends the
-  chain, the operator calls `zone_setLeader` for it to return to the on-chain schedule;
-  `check-recovery` does the same if a recovery is still open.
+- `force-recovery` (`parallel_driver_force_recovery`, template `zone_recovery` only) is the
+  operator's crashed-leader runbook from `crates/zones/p2p/README.md`. When the portal's leader
+  does not answer and the two other sequencers hold the same tip for 5 s, the operator stops
+  the old leader through `zone-node.sh` (control file `/control/stop-zone-N`) and waits for the
+  acknowledgement in `/acks`; without it, it does not force recovery. It then writes the
+  `[forced_recovery]` directive, with which every node restarts (the old leader too), compares
+  the old leader's first block after the recovery point with the recovery leader's, calls
+  `zone_setLeader` once the recovery leader has extended the chain, and removes the directive
+  when every answering sequencer has passed that transition.
+- `zone-node.sh` supervises the node: it restarts a node that exits by itself, so the compose
+  file sets no restart policy.
 
-Launch (HA faults, `l1` and `workload` excluded from faults):
+Two templates: `zone_dist` (traffic, leader rotation, checks) and `zone_recovery` (the same plus
+`force-recovery`). The workload image takes `--build-arg TEMPLATES="zone_dist"` or
+`"zone_recovery"` to offer one of them; results are in [FINDINGS.md](FINDINGS.md).
+
+Launch, on a tenant that sets run length by duration:
 
 ```bash
-SNOUTY_UNSTABLE_FEATURES=teams snouty launch --launcher basic_test --config zones/antithesis \
-    --max-compute-hours 36 --fault-tolerance high_availability \
+# zone_dist: network faults on every link, including zone-to-L1 (finding 1)
+snouty launch --launcher basic_test --config zones/antithesis --duration 30m \
+    --performance-tier turbo --filter-logs-matching ' INFO reth_node_events::node'
+
+# zone_recovery: node and network faults on the zone nodes (finding 2)
+snouty launch --launcher basic_test --config zones/antithesis --duration 30m \
+    --performance-tier turbo --fault-tolerance high_availability \
     --fault-exclusions '^(workload|l1|provision)$' \
     --filter-logs-matching ' INFO reth_node_events::node'
 ```
