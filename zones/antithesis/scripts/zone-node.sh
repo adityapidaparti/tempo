@@ -45,6 +45,12 @@ write_manifest() {
     mv "$MANIFEST.tmp" "$MANIFEST"
 }
 
+# The operator can stop this node and keep it stopped, as with `systemctl stop` on its host: while
+# /control/stop-zone-<node> exists the node is not running, and the supervisor copies that file to
+# /acks/zone-<node> so the operator knows the stop took effect.
+FENCE=/control/stop-zone-$NODE
+ACK=/acks/zone-$NODE
+
 # A minimal supervisor, standing in for the process supervisor a production node runs under:
 # when the node process exits by itself, the exit is logged with its code and the node is
 # started again on the same datadir. On SIGTERM or SIGINT the signal is passed to the node and
@@ -56,6 +62,18 @@ STOPPING=
 trap 'STOPPING=1; if [ -n "$CHILD" ]; then kill -TERM "$CHILD" 2>/dev/null || true; fi' TERM INT
 
 while :; do
+    if [ -n "$STOPPING" ]; then
+        echo "zone-node supervisor: stop signal while the node was not running, exiting"
+        exit 0
+    fi
+    while [ -e "$FENCE" ] && [ -z "$STOPPING" ]; do
+        if ! cmp -s "$FENCE" "$ACK" 2>/dev/null; then
+            cp "$FENCE" "$ACK.tmp" && mv "$ACK.tmp" "$ACK"
+            echo "zone-node supervisor: the operator stopped this node; acknowledged"
+        fi
+        sleep 1
+    done
+    rm -f "$ACK"
     if [ -n "$STOPPING" ]; then
         echo "zone-node supervisor: stop signal while the node was not running, exiting"
         exit 0
@@ -82,8 +100,15 @@ while :; do
     # A stop signal that arrived between the check above and the start: pass it on now.
     if [ -n "$STOPPING" ]; then kill -TERM "$CHILD" 2>/dev/null || true; fi
     DIRECTIVE=
+    FENCED=
     while kill -0 "$CHILD" 2>/dev/null; do
         sleep 1
+        if [ -z "$STOPPING" ] && [ -e "$FENCE" ]; then
+            echo "zone-node supervisor: the operator asked to stop this node"
+            FENCED=1
+            kill -TERM "$CHILD" 2>/dev/null || true
+            break
+        fi
         if [ -z "$STOPPING" ] && [ "$(recovery_stamp)" != "$STAMP" ]; then
             echo "zone-node supervisor: forced-recovery directive changed, restarting the node"
             DIRECTIVE=1
@@ -104,7 +129,9 @@ while :; do
         echo "zone-node supervisor: node exited code=$CODE after a stop signal, exiting"
         exit "$CODE"
     fi
-    if [ -n "$DIRECTIVE" ]; then
+    if [ -n "$FENCED" ]; then
+        echo "zone-node supervisor: node exited code=$CODE after the operator's stop"
+    elif [ -n "$DIRECTIVE" ]; then
         echo "zone-node supervisor: node exited code=$CODE for the forced-recovery directive, restarting"
     else
         echo "zone-node supervisor: node exited code=$CODE, restarting"

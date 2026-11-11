@@ -91,6 +91,10 @@ pub(crate) struct Antithesis {
     #[arg(long, env = "CONTROL_DIR", default_value = "/control")]
     control_dir: PathBuf,
 
+    /// Directory the zone nodes write their stop acknowledgements to.
+    #[arg(long, env = "ACKS_DIR", default_value = "/acks")]
+    acks_dir: PathBuf,
+
     /// Directory holding the workload ledger and account leases.
     #[arg(long, env = "WORKLOAD_STATE_DIR", default_value = "/state")]
     state_dir: PathBuf,
@@ -167,6 +171,7 @@ struct Context {
     ledger: Ledger,
     state_dir: PathBuf,
     control_dir: PathBuf,
+    acks_dir: PathBuf,
     http: reqwest::Client,
     l1_url: reqwest::Url,
     l1: DynProvider,
@@ -196,6 +201,7 @@ impl Context {
             ledger: Ledger::open(&args.state_dir)?,
             state_dir: args.state_dir.clone(),
             control_dir: args.control_dir.clone(),
+            acks_dir: args.acks_dir.clone(),
             l1: connect(&args.l1_rpc_url),
             zones: args.zone_rpc_urls.iter().map(connect).collect(),
             l1_url: args.l1_rpc_url.clone(),

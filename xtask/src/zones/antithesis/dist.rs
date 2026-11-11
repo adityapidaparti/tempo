@@ -14,7 +14,7 @@ use alloy::{
     sol_types::SolEvent as _,
     transports::http::reqwest,
 };
-use antithesis_sdk::{assert_always, assert_sometimes};
+use antithesis_sdk::{assert_always, assert_sometimes, random::get_random};
 use eyre::{OptionExt as _, WrapErr as _};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
@@ -59,7 +59,12 @@ const SET_LEADER_TIMEOUT: Duration = Duration::from_secs(45);
 
 /// How long the operator watches a silent leader and unchanged survivor tips before forcing
 /// recovery.
-const LEADER_SILENCE: Duration = Duration::from_secs(10);
+const LEADER_SILENCE: Duration = Duration::from_secs(5);
+/// How long the operator waits for the old leader's host to confirm its node is stopped. Without
+/// that confirmation the operator does not force recovery.
+const STOP_CONFIRMED: Duration = Duration::from_secs(60);
+/// How long the operator waits for the old leader to answer after it is started again.
+const OLD_LEADER_BACK: Duration = Duration::from_secs(60);
 /// How long the operator waits for the recovery leader to extend the chain.
 const RECOVERY_PRODUCES: Duration = Duration::from_secs(90);
 
@@ -72,6 +77,8 @@ struct RecoveryDirective {
     leader_address: alloy::primitives::Address,
     /// RPC URL index of the recovery leader.
     leader_index: usize,
+    /// RPC URL index of the leader the operator stopped before forcing recovery.
+    old_leader_index: usize,
     recovery_block_hash: B256,
     recovery_height: u64,
     /// The portal's leader epoch when the directive was written. The directive is complete
@@ -243,15 +250,21 @@ impl Context {
             .ok()
     }
 
-    /// Operator action, following the crashed-leader runbook in `crates/zones/p2p/README.md`:
-    /// when the leader does not answer and both other sequencers sit on the same tip for
-    /// [`LEADER_SILENCE`], writes a `[forced_recovery]` directive naming one of them and that
-    /// tip. Every node restarts with it (see `zone-node.sh`). Once the recovery leader extends
-    /// the chain, the operator returns the zone to the on-chain schedule with `zone_setLeader`.
+    /// Operator action, following the crashed-leader runbook in `crates/zones/p2p/README.md`
+    /// ("the operator stops the nodes, selects a canonical tip shared by the survivors, adds
+    /// the same `[forced_recovery]` directive to every manifest, and restarts them"):
+    ///
+    /// 1. The portal's leader does not answer and both other sequencers sit on the same tip for
+    ///    [`LEADER_SILENCE`].
+    /// 2. The operator stops the old leader's node through its host (`zone-node.sh`) and waits
+    ///    for the host to confirm. No confirmation, for example from a frozen host, means no
+    ///    forced recovery.
+    /// 3. With the survivors still on that tip, the operator writes the directive naming one
+    ///    of them. Every node restarts with it; the old leader is started again with the same
+    ///    directive.
+    /// 4. Once the recovery leader extends the chain, the operator returns the zone to the
+    ///    on-chain schedule with `zone_setLeader`.
     pub(super) async fn force_recovery(&self) -> eyre::Result<()> {
-        if random_below(2) == 0 {
-            return Ok(());
-        }
         // One operator at a time.
         let lock = OpenOptions::new()
             .create(true)
@@ -265,14 +278,19 @@ impl Context {
             // An earlier operator run was cut short: finish its recovery.
             return self.finish_recovery(&directive).await;
         }
+        // A stop left by an operator run that was cut short before it wrote a directive.
+        self.clear_stops()?;
         let portal = ZonePortal::new(self.portal, &self.l1);
         let portal_leader = portal.leader().call().await?;
         let portal_epoch: u64 = portal.leaderEpoch().call().await?;
 
         // The survivors: both sequencers that are not the portal's leader answer, follow, and
         // hold the same tip; the remaining sequencer does not answer.
-        let survey = async || -> Option<(Vec<(usize, String, alloy::primitives::Address)>, B256, u64)> {
-            let infos = futures::future::join_all((0..QUORUM).map(|index| self.sequencer_info(index))).await;
+        type Survey = (Vec<(usize, String, alloy::primitives::Address)>, B256, u64);
+        let survey = async || -> Option<Survey> {
+            let infos =
+                futures::future::join_all((0..QUORUM).map(|index| self.sequencer_info(index)))
+                    .await;
             let mut survivors = Vec::new();
             let mut tips = BTreeSet::new();
             for (index, info) in infos.iter().enumerate() {
@@ -282,13 +300,7 @@ impl Context {
                 if address == portal_leader || info["local"]["role"].as_str() == Some("leader") {
                     return None;
                 }
-                let hash: B256 = serde_json::from_value(info["localTip"]["zoneHash"].clone()).ok()?;
-                let height = u64::from_str_radix(
-                    info["localTip"]["zoneHeight"].as_str()?.trim_start_matches("0x"),
-                    16,
-                )
-                .ok()?;
-                tips.insert((hash, height));
+                tips.insert(local_tip(info)?);
                 survivors.push((index, info["local"]["name"].as_str()?.to_owned(), address));
             }
             let &(hash, height) = tips.first()?;
@@ -298,18 +310,47 @@ impl Context {
             return Ok(());
         };
         tokio::time::sleep(LEADER_SILENCE).await;
-        let Some((survivors, tip, height)) = survey().await else {
+        let Some((survivors, tip, _)) = survey().await else {
             return Ok(());
         };
         if tip != first_tip {
             return Ok(());
         }
+        let Some(old_leader_index) =
+            (0..QUORUM).find(|index| survivors.iter().all(|(survivor, _, _)| survivor != index))
+        else {
+            return Ok(());
+        };
+
+        // Stop the old leader and wait for its host to confirm.
+        let stop_id = format!("{}-{}", portal_epoch, get_random());
+        self.write_control(&stop_file(old_leader_index), stop_id.as_bytes())?;
+        let ack = self.acks_dir.join(format!("zone-{old_leader_index}"));
+        let confirmed = poll_until(STOP_CONFIRMED, async || {
+            Ok(std::fs::read(&ack).is_ok_and(|bytes| bytes == stop_id.as_bytes()))
+        })
+        .await?;
+        assert_sometimes!(
+            !confirmed,
+            "Operator cannot confirm the old leader is stopped and does not force recovery",
+            &json!({ "old_leader": old_leader_index })
+        );
+        // The survivors must still share the tip they had before the leader was stopped.
+        let after_stop = if confirmed { survey().await } else { None };
+        let Some((survivors, tip, height)) = after_stop.filter(|(_, tip, _)| *tip == first_tip)
+        else {
+            self.clear_stops()?;
+            println!("force-recovery: aborted, old leader zone-{old_leader_index} confirmed={confirmed}");
+            return Ok(());
+        };
+
         let (leader_index, leader, leader_address) =
             survivors[random_index(survivors.len())].clone();
         let directive = RecoveryDirective {
             leader,
             leader_address,
             leader_index,
+            old_leader_index,
             recovery_block_hash: tip,
             recovery_height: height,
             portal_epoch,
@@ -326,16 +367,19 @@ impl Context {
         )?;
         assert_sometimes!(
             true,
-            "Operator forces recovery after the leader stops answering",
+            "Operator forces recovery after stopping a leader that stopped answering",
             &json!({ "directive": directive, "portal_leader": portal_leader })
         );
         println!("force-recovery: wrote {directive:?}");
         self.finish_recovery(&directive).await
     }
 
-    /// Waits for the recovery leader to extend the chain, then returns the zone to the
-    /// on-chain schedule by naming it leader on the portal.
+    /// Starts the old leader again with the directive, waits for the recovery leader to extend
+    /// the chain, then returns the zone to the on-chain schedule by naming it leader on the
+    /// portal.
     async fn finish_recovery(&self, directive: &RecoveryDirective) -> eyre::Result<()> {
+        // "Adds the same directive to every manifest, and restarts them": the old leader too.
+        self.clear_stops()?;
         let zone = &self.zones[directive.leader_index];
         let produced = poll_until(RECOVERY_PRODUCES, async || {
             Ok(zone.get_block_number().await? > directive.recovery_height)
@@ -350,6 +394,7 @@ impl Context {
             println!("force-recovery: {} has not produced yet", directive.leader);
             return Ok(());
         }
+        self.compare_old_leader(directive).await;
         let response = self
             .set_leader(directive.leader_index, directive.leader_address)
             .await?;
@@ -362,10 +407,63 @@ impl Context {
         Ok(())
     }
 
+    /// The head comparison the runbook asks for: once the old leader answers again, is its
+    /// first block after the recovery point the recovery leader's? Records the answer; the
+    /// runbook names no remedy when it is not.
+    async fn compare_old_leader(&self, directive: &RecoveryDirective) {
+        let next = BlockNumberOrTag::Number(directive.recovery_height + 1);
+        let old = &self.zones[directive.old_leader_index];
+        let recovery = &self.zones[directive.leader_index];
+        let mut hashes = None;
+        let _ = poll_until(OLD_LEADER_BACK, async || {
+            let Some(mine) = old.get_block_by_number(next).await? else {
+                // It answers but has not reached that height yet: nothing of its own there.
+                hashes = Some((None, None));
+                return Ok(true);
+            };
+            let theirs = recovery.get_block_by_number(next).await?;
+            hashes = Some((Some(mine.header.hash), theirs.map(|block| block.header.hash)));
+            Ok(true)
+        })
+        .await;
+        let Some((old_hash, recovery_hash)) = hashes else {
+            println!("force-recovery: old leader did not answer after its restart");
+            return;
+        };
+        let own_blocks = old_hash.is_some() && old_hash != recovery_hash;
+        assert_sometimes!(
+            own_blocks,
+            "A restarted old leader holds blocks after the recovery point that the recovery leader did not produce",
+            &json!({
+                "directive": directive,
+                "height": directive.recovery_height + 1,
+                "old_leader_hash": old_hash,
+                "recovery_leader_hash": recovery_hash,
+            })
+        );
+        println!(
+            "force-recovery: old leader zone-{} at {}: own={old_hash:?} recovery={recovery_hash:?}",
+            directive.old_leader_index,
+            directive.recovery_height + 1
+        );
+    }
+
+    /// Removes every operator stop, so stopped nodes start again.
+    fn clear_stops(&self) -> eyre::Result<()> {
+        for index in 0..QUORUM {
+            match std::fs::remove_file(self.control_dir.join(stop_file(index))) {
+                Ok(()) => println!("force-recovery: started zone-{index} again"),
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+                Err(error) => return Err(error.into()),
+            }
+        }
+        Ok(())
+    }
+
     /// Writes a control file atomically.
     fn write_control(&self, name: &str, bytes: &[u8]) -> eyre::Result<()> {
         let path = self.control_dir.join(name);
-        let tmp = path.with_extension("tmp");
+        let tmp = self.control_dir.join(format!(".{name}.tmp"));
         std::fs::write(&tmp, bytes)?;
         std::fs::rename(&tmp, &path)?;
         Ok(())
@@ -772,6 +870,8 @@ impl Context {
     /// settles within [`BATCH_DEADLINE`] (L1), then nodes converge (L2) and every confirmed
     /// deposit and withdrawal lands (M1), via `check-settled`.
     pub(super) async fn check_recovery(&self) -> eyre::Result<()> {
+        // An operator run cut short may have left a node stopped: an operator would start it.
+        self.clear_stops()?;
         let mut heads = Vec::new();
         let up = poll_until(NODES_UP_TIMEOUT, async || {
             self.l1.get_block_number().await?;
@@ -919,4 +1019,20 @@ impl Context {
         println!("check-backing: backed={backed} {last}");
         Ok(())
     }
+}
+
+/// The control file that keeps the sequencer at `index` stopped while it exists.
+fn stop_file(index: usize) -> String {
+    format!("stop-zone-{index}")
+}
+
+/// The (hash, height) of a node's local tip from its `zone_getSequencerInfo` answer.
+fn local_tip(info: &serde_json::Value) -> Option<(B256, u64)> {
+    let hash: B256 = serde_json::from_value(info["localTip"]["zoneHash"].clone()).ok()?;
+    let height = u64::from_str_radix(
+        info["localTip"]["zoneHeight"].as_str()?.trim_start_matches("0x"),
+        16,
+    )
+    .ok()?;
+    Some((hash, height))
 }
