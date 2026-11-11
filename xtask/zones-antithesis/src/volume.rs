@@ -50,6 +50,8 @@ const CALL_GAS: u64 = 200_000;
 const MAX_TXS: u128 = 16;
 /// Most base units a dust payment carries. Two of them stay within one byte (127).
 const DUST: u128 = 60;
+/// How long a cohort waits for its second instalment.
+const COHORT_WAIT: std::time::Duration = std::time::Duration::from_secs(15);
 /// Largest balance, in base units, counted as small: such a balance slot's trie leaf can be
 /// shorter than 32 bytes, so it is embedded in its parent.
 const SMALL_AMOUNT: u128 = 127;
@@ -359,7 +361,17 @@ fn claim_cohort(dir: &std::path::Path) -> eyre::Result<Option<(u64, usize)>> {
         let (Ok(seed), Ok(count)) = (seed.parse(), count.parse()) else {
             continue;
         };
-        if fs::remove_file(dir.join("pending").join(&name)).is_ok() {
+        // A cohort waits until its first instalment is in an earlier batch than the second:
+        // the prover's witness covers a whole batch (20 blocks, about 10 seconds).
+        let path = dir.join("pending").join(&name);
+        let waited = fs::metadata(&path)
+            .and_then(|metadata| metadata.modified())
+            .ok()
+            .and_then(|modified| modified.elapsed().ok());
+        if waited.is_none_or(|waited| waited < COHORT_WAIT) {
+            continue;
+        }
+        if fs::remove_file(&path).is_ok() {
             return Ok(Some((seed, count)));
         }
     }
