@@ -15429,6 +15429,7 @@ dependencies = [
  "serde_json",
  "tempfile",
  "tempo-contracts",
+ "tempo-precompiles",
  "tempo-primitives",
  "tokio",
  "zone-precompiles",

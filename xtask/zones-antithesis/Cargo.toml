@@ -20,6 +20,7 @@ workspace = true
 # (see contrib/antithesis/zones/Dockerfile), so only the system under test reports coverage.
 [dependencies]
 tempo-contracts = { workspace = true, features = ["std", "serde", "rpc"] }
+tempo-precompiles.workspace = true
 tempo-primitives = { workspace = true, features = ["std"] }
 zone-precompiles = { workspace = true, features = ["std"] }
 zone-rpc.workspace = true

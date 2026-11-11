@@ -1,0 +1,9 @@
+# Workload image variants for the planted-Reth-bug runs. All share one binary; they differ only
+# in which extra parallel drivers the zone_payments template offers:
+#   asis: Tempo's template unchanged
+#   vol:  + parallel_driver_payroll (realistic volume, no mined keys)
+#   deep: + parallel_driver_deep (ACCELERATOR: mined deep-key menu)
+ARG BASE=tempo-zones-antithesis-workload:planted-all
+FROM ${BASE}
+ARG REMOVE
+RUN cd /opt/antithesis/test/v1/zone_payments && rm -f ${REMOVE} && ls

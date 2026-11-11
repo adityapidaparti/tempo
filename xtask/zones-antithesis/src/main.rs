@@ -38,6 +38,7 @@ use ledger::{Account, Lease, Ledger, Record};
 
 mod checks;
 mod ledger;
+mod volume;
 
 #[tokio::main]
 async fn main() -> eyre::Result<()> {
@@ -124,6 +125,10 @@ enum Command {
     Withdraw,
     /// Funds a batch of new zone accounts from one sender.
     Fanout,
+    /// Pays dust to cohorts of new holders in batched transactions, twice each.
+    Payroll,
+    /// Accelerator: credits holders from a mined menu of deep trie keys.
+    Deep,
     /// Hands zone leadership to another sequencer, through the admin or a node's
     /// `zone_setLeader` relay.
     RotateLeader,
@@ -149,6 +154,8 @@ impl Antithesis {
             Command::Transfer => ctx.transfer().await,
             Command::Withdraw => ctx.withdraw().await,
             Command::Fanout => ctx.fanout().await,
+            Command::Payroll => ctx.payroll().await,
+            Command::Deep => ctx.deep().await,
             Command::RotateLeader => ctx.rotate_leader().await,
         };
         // Under faults, or on a node that lags the sequencer, a send can be rejected (nonce too
@@ -167,6 +174,7 @@ impl Antithesis {
 /// Connections and state every command uses.
 struct Context {
     ledger: Ledger,
+    state_dir: PathBuf,
     http: reqwest::Client,
     l1_url: reqwest::Url,
     l1: DynProvider,
@@ -194,6 +202,7 @@ impl Context {
         };
         Ok(Self {
             ledger: Ledger::open(&args.state_dir)?,
+            state_dir: args.state_dir.clone(),
             l1: connect(&args.l1_rpc_url),
             zones: args.zone_rpc_urls.iter().map(connect).collect(),
             l1_url: args.l1_rpc_url.clone(),
