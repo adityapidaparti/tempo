@@ -45,10 +45,21 @@ write_manifest() {
     mv "$MANIFEST.tmp" "$MANIFEST"
 }
 
+# A minimal supervisor, standing in for the process supervisor a production node runs under:
+# when the node process exits by itself, the exit is logged with its code and the node is
+# started again on the same datadir. On SIGTERM or SIGINT the signal is passed to the node and
+# the container exits with the node's status.
 CHILD=
-trap '[ -n "$CHILD" ] && kill -TERM "$CHILD" 2>/dev/null' TERM INT
+STOPPING=
+# The node may already be gone when the signal arrives (it exited by itself and the supervisor
+# is pausing before the restart): a failed kill must not end the script through set -e.
+trap 'STOPPING=1; if [ -n "$CHILD" ]; then kill -TERM "$CHILD" 2>/dev/null || true; fi' TERM INT
 
 while :; do
+    if [ -n "$STOPPING" ]; then
+        echo "zone-node supervisor: stop signal while the node was not running, exiting"
+        exit 0
+    fi
     STAMP=$(recovery_stamp)
     write_manifest
     # shellcheck disable=SC2086
@@ -68,17 +79,35 @@ while :; do
         --color never \
         $ROLE_ARGS &
     CHILD=$!
+    # A stop signal that arrived between the check above and the start: pass it on now.
+    if [ -n "$STOPPING" ]; then kill -TERM "$CHILD" 2>/dev/null || true; fi
+    DIRECTIVE=
     while kill -0 "$CHILD" 2>/dev/null; do
         sleep 1
-        if [ "$(recovery_stamp)" != "$STAMP" ]; then
-            echo "zone-node: forced-recovery directive changed; restarting the node"
+        if [ -z "$STOPPING" ] && [ "$(recovery_stamp)" != "$STAMP" ]; then
+            echo "zone-node supervisor: forced-recovery directive changed, restarting the node"
+            DIRECTIVE=1
             kill -TERM "$CHILD" 2>/dev/null || true
-            wait "$CHILD" || true
-            continue 2
+            break
         fi
     done
-    # The node exited on its own or on a signal: exit with its status.
     set +e
     wait "$CHILD"
-    exit $?
+    CODE=$?
+    # A signal that interrupted the wait: collect the node's own status.
+    if kill -0 "$CHILD" 2>/dev/null; then
+        wait "$CHILD"
+        CODE=$?
+    fi
+    set -e
+    if [ -n "$STOPPING" ]; then
+        echo "zone-node supervisor: node exited code=$CODE after a stop signal, exiting"
+        exit "$CODE"
+    fi
+    if [ -n "$DIRECTIVE" ]; then
+        echo "zone-node supervisor: node exited code=$CODE for the forced-recovery directive, restarting"
+    else
+        echo "zone-node supervisor: node exited code=$CODE, restarting"
+        sleep 1
+    fi
 done

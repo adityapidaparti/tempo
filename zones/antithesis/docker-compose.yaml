@@ -25,7 +25,8 @@ x-zone: &zone
   depends_on:
     provision:
       condition: service_completed_successfully
-  restart: unless-stopped
+  # No restart policy: zone-node.sh restarts a node that exits by itself, and the test platform
+  # restarts the containers it stops or kills.
 
 services:
   l1:

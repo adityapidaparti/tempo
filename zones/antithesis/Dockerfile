@@ -101,7 +101,11 @@ WORKDIR /app
 # this image has it, so no other container offers test commands. Build it with
 # --target workload.
 FROM runtime AS workload
-COPY --chmod=755 zones/antithesis/test/v1/zone_dist/ /opt/antithesis/test/v1/zone_dist/
+# TEMPLATES picks the test templates the image offers: zone_dist (traffic, leader rotation and
+# the checks) and/or zone_recovery (the same plus the forced-recovery operator).
+ARG TEMPLATES="zone_dist zone_recovery"
+COPY --chmod=755 zones/antithesis/test/v1/ /opt/templates/
+RUN mkdir -p /opt/antithesis/test/v1 && for t in $TEMPLATES; do cp -r "/opt/templates/$t" /opt/antithesis/test/v1/; done && rm -rf /opt/templates
 
 # The default target stays the image the nodes run.
 FROM runtime
