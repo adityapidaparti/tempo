@@ -423,6 +423,61 @@ impl Engine {
         Ok(self.parent.hash())
     }
 
+    /// Model-vs-node checks of the state the next block builds on, run before the block is
+    /// produced (added for the planted-bug hunt; nothing here is specific to one bug):
+    ///
+    /// - the incremental state root of the block's state change over the parent overlay, as a
+    ///   payload builder without the state root task computes it, equals the model's root;
+    /// - the execution witness of that state change is produced, and holds every hashed node of
+    ///   the pre-state proofs of the keys the block writes.
+    pub(crate) fn check_parent_view(
+        &self,
+        targets: &[antithesis_trie_shapes::harness::ProofTarget],
+        updates: &[HashedPostState],
+        expected_root: B256,
+    ) -> Result<()> {
+        let number = self.head() + 1;
+        let mut block_state = HashedPostState::default();
+        for update in updates {
+            block_state.extend(update.clone());
+        }
+        let provider = OverlayStateProviderFactory::new(
+            self.factory.clone(),
+            self.factory.overlay_manager().overlay_builder(self.parent.hash()),
+        )
+        .database_provider_ro()?;
+        let incremental = provider.state_root(block_state.clone())?;
+        invariant!(
+            incremental == expected_root,
+            "incremental root at block {number}: expected {}, actual {}",
+            expected_root,
+            incremental
+        );
+        let witness = crate::proof::block_witness(&provider, block_state);
+        let error = witness.as_ref().err().map(|error| format!("{error:#}"));
+        invariant!(
+            error.is_none(),
+            "execution witness of block {number}'s state change: {}",
+            error.as_deref().unwrap_or_default()
+        );
+        let witness = witness?.iter().map(keccak256).collect::<BTreeSet<_>>();
+        let proofs = crate::proof::get_multi_proof(&provider, targets)?;
+        // A node shorter than a hash is embedded in its parent, never a witness entry.
+        let missing = proofs
+            .iter()
+            .flat_map(|proof| {
+                proof.proof.iter().chain(proof.storage_proofs.iter().flat_map(|slot| &slot.proof))
+            })
+            .filter(|node| node.len() >= B256::len_bytes() && !witness.contains(&keccak256(node)))
+            .count();
+        invariant!(
+            missing == 0,
+            "execution witness of block {number} lacks {} pre-state proof nodes of written keys",
+            missing
+        );
+        Ok(())
+    }
+
     /// The state root the overlay serves at the head, computed from the database and in-memory
     /// blocks rather than by the state root task.
     pub(crate) fn tip_root(&self) -> Result<B256> {

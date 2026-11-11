@@ -404,6 +404,23 @@ impl Round {
         );
         // Rebuild from the plain model, independently of production hashed state and trie updates.
         let expected_root = root(&self.state);
+        // Written keys as proof targets, one per account with all its written slots.
+        let mut written = BTreeMap::<_, Vec<B256>>::new();
+        for update in &updates_input {
+            match update {
+                model::Update::Account { address, .. } => {
+                    written.entry(*address).or_default();
+                }
+                model::Update::Storage { address, slot, .. } => {
+                    written.entry(*address).or_default().push(B256::from(*slot));
+                }
+            }
+        }
+        let written = written
+            .into_iter()
+            .map(|(address, slots)| ProofTarget { address, slots })
+            .collect::<Vec<_>>();
+        self.engine.check_parent_view(&written, &updates, expected_root)?;
         let hash = self.engine.produce(&operations, bundle, updates, expected_root)?;
         // Publish the block only once the overlay manager can serve it.
         self.view

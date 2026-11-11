@@ -53,3 +53,11 @@ pub(crate) fn witness(
     }
     Ok(state.witness(TrieInput::default(), post_state, ExecutionWitnessMode::Legacy)?)
 }
+
+/// The trie part of `debug_executionWitness` for a block's own state change.
+pub(crate) fn block_witness(
+    state: &impl StateProofProvider,
+    post_state: HashedPostState,
+) -> Result<Vec<Bytes>> {
+    Ok(state.witness(TrieInput::default(), post_state, ExecutionWitnessMode::Legacy)?)
+}
