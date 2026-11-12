@@ -13,12 +13,12 @@ Runs by Antithesis on the `tempo` tenant, tagged `antithesis-adi`. Two tracks:
 
 | # | Bug | Status | Run | Failing property |
 |---|---|---|---|---|
-| 1 | A role change that overlaps about 40 s of L1-link disruption ends the node's role controller for good; the zone halts if that node is the next leader | Found; survived review | [`06d7a6f20b71bce259a9be336de8bac0-67-0`](https://tempo.antithesis.com/run?run_id=06d7a6f20b71bce259a9be336de8bac0-67-0) | Role controller exits after an unproven generation teardown (12) |
-| 2 | After forced recovery, a restarted old leader keeps its unreplicated blocks, and other nodes can backfill them, splitting the zone from the settled chain | Found; stands as a missing guard and a runbook gap | [`8d428ae3758d98a507f4e1de6c86ac40-67-0`](https://tempo.antithesis.com/run?run_id=8d428ae3758d98a507f4e1de6c86ac40-67-0) | Follower canonical block matches the settled batch (9); No forks (14) |
-| 3 | After forced recovery and `zone_setLeader`, the named leader started a follower generation and never led | Under investigation, one event | [`8d428ae3758d98a507f4e1de6c86ac40-67-0`](https://tempo.antithesis.com/run?run_id=8d428ae3758d98a507f4e1de6c86ac40-67-0) | Zone chain advances after faults stop |
-| 4a | Planted: inline witness children (SIGP-334), through the zone prover, by realistic traffic | Found | [`6c31e497e76ccd1852459d3efe06d823-67-0`](https://tempo.antithesis.com/run?run_id=6c31e497e76ccd1852459d3efe06d823-67-0) | Native prover accepts the sequencer witness (33) |
-| 4b | The same, with a mined-key accelerator | Found; control on fixed Reth is clean ([`13021985d1ad5c750b42fb9149f1f188-67-0`](https://tempo.antithesis.com/run?run_id=13021985d1ad5c750b42fb9149f1f188-67-0)) | [`0dca3443c205133a127cfe4549c7e192-67-0`](https://tempo.antithesis.com/run?run_id=0dca3443c205133a127cfe4549c7e192-67-0) | Native prover accepts the sequencer witness (22) |
-| 4c | The same, on the proof path, with Tempo's `reth-state-root` harness unchanged | Found | [`eba6d113a8fc0f9c9236188ab9702076-67-0`](https://tempo.antithesis.com/run?run_id=eba6d113a8fc0f9c9236188ab9702076-67-0) | eth_getMultiProof proofs verify against the model's state root (169) |
+| 1 | A role change that overlaps about 40 s of L1-link disruption ends the node's role controller for good; the zone halts if that node is the next leader | Found; survived review | `06d7a6f20b71bce259a9be336de8bac0-67-0` | Role controller exits after an unproven generation teardown (12) |
+| 2 | After forced recovery, a restarted old leader keeps its unreplicated blocks, and other nodes can backfill them, splitting the zone from the settled chain | Found; stands as a missing guard and a runbook gap | `8d428ae3758d98a507f4e1de6c86ac40-67-0` | Follower canonical block matches the settled batch (9); No forks (14) |
+| 3 | After forced recovery and `zone_setLeader`, the named leader started a follower generation and never led | Under investigation, one event | `8d428ae3758d98a507f4e1de6c86ac40-67-0` | Zone chain advances after faults stop |
+| 4a | Planted: inline witness children (SIGP-334), through the zone prover, by realistic traffic | Found | `6c31e497e76ccd1852459d3efe06d823-67-0` | Native prover accepts the sequencer witness (33) |
+| 4b | The same, with a mined-key accelerator | Found; control on fixed Reth is clean (`13021985d1ad5c750b42fb9149f1f188-67-0`) | `0dca3443c205133a127cfe4549c7e192-67-0` | Native prover accepts the sequencer witness (22) |
+| 4c | The same, on the proof path, with Tempo's `reth-state-root` harness unchanged | Found | `eba6d113a8fc0f9c9236188ab9702076-67-0` | eth_getMultiProof proofs verify against the model's state root (169) |
 | 5 | Planted: proof target bugs (reverts Reth #28085) | Not found | | |
 | 6 | Planted: `node_iter` revert (reverts Reth #28264) | Not found | | |
 
@@ -49,7 +49,7 @@ role controller task. The process stays up, answers RPC and still reports its la
 no longer leads or follows, and it does not recover when the network heals. If the portal names
 that node leader, nobody produces blocks until someone restarts it.
 
-### Evidence (run [`06d7a6f20b71bce259a9be336de8bac0-67-0`](https://tempo.antithesis.com/run?run_id=06d7a6f20b71bce259a9be336de8bac0-67-0))
+### Evidence (run `06d7a6f20b71bce259a9be336de8bac0-67-0`)
 
 Workload: deposits, transfers, withdrawals and operator leader rotation through
 `zone_setLeader`. Faults: network faults on every link, including each zone node's link to L1.
@@ -121,7 +121,7 @@ point. Two things follow:
 - Other nodes can import the old leader's blocks through backfill and end up on its chain too,
   while the recovery leader's chain is the one settled on L1.
 
-### Evidence (run [`8d428ae3758d98a507f4e1de6c86ac40-67-0`](https://tempo.antithesis.com/run?run_id=8d428ae3758d98a507f4e1de6c86ac40-67-0))
+### Evidence (run `8d428ae3758d98a507f4e1de6c86ac40-67-0`)
 
 Workload: as above, plus an operator that follows the crashed-leader runbook in
 `crates/zones/p2p/README.md`. Faults: node pause, throttle, stop and kill, partitions and clock
@@ -213,7 +213,7 @@ the runbook does not say to wipe or resync the old leader.
 
 ## 3. Under investigation: named leader starts following and never leads
 
-One event in run [`8d428ae3758d98a507f4e1de6c86ac40-67-0`](https://tempo.antithesis.com/run?run_id=8d428ae3758d98a507f4e1de6c86ac40-67-0), input hash `-4901740061769937608`.
+One event in run `8d428ae3758d98a507f4e1de6c86ac40-67-0`, input hash `-4901740061769937608`.
 After a forced recovery, `zone_setLeader` named the recovery leader `zone-2` (vtime 397.26). At
 399.74 `zone-2` logged `Follower generation started generation=2 epoch=1` and did not lead
 afterwards. Faults stopped at 406.54 and the head stayed at block 537 for the 180 s the
@@ -233,16 +233,16 @@ Tempo's `antithesis-poc` branch pins a Reth revision carrying three deliberate c
 **Found: inline witness children (SIGP-334).** A witness or proof mishandles a trie node small
 enough to be embedded in its parent.
 
-- *Realistic traffic, no mined keys* (run [`6c31e497e76ccd1852459d3efe06d823-67-0`](https://tempo.antithesis.com/run?run_id=6c31e497e76ccd1852459d3efe06d823-67-0), 60 min, faults off). A driver pays small
+- *Realistic traffic, no mined keys* (run `6c31e497e76ccd1852459d3efe06d823-67-0`, 60 min, faults off). A driver pays small
   amounts to cohorts of new random holders in batched transactions, twice each. At about 6,700
   holders two recipients' storage keys shared 8 leading nibbles, and the next batch failed
   `Native prover accepts the sequencer witness` with `incomplete storage proof` (33 failures over
   7 slots). First moment: input hash `8717736145821261756`, vtime 145.45. Three of the 7 slots
   were traced to such a pair; the other 4 were not checked.
-- *Mined-key accelerator* (run [`0dca3443c205133a127cfe4549c7e192-67-0`](https://tempo.antithesis.com/run?run_id=0dca3443c205133a127cfe4549c7e192-67-0), 15 min). Same property, 22 failures. The same driver on
-  fixed Reth (run [`13021985d1ad5c750b42fb9149f1f188-67-0`](https://tempo.antithesis.com/run?run_id=13021985d1ad5c750b42fb9149f1f188-67-0)) passed 93 times with no failure while reaching the same trie shape 32
+- *Mined-key accelerator* (run `0dca3443c205133a127cfe4549c7e192-67-0`, 15 min). Same property, 22 failures. The same driver on
+  fixed Reth (run `13021985d1ad5c750b42fb9149f1f188-67-0`) passed 93 times with no failure while reaching the same trie shape 32
   times.
-- *Proof path* (run [`eba6d113a8fc0f9c9236188ab9702076-67-0`](https://tempo.antithesis.com/run?run_id=eba6d113a8fc0f9c9236188ab9702076-67-0), 15 min, Tempo's `reth-state-root` harness unchanged).
+- *Proof path* (run `eba6d113a8fc0f9c9236188ab9702076-67-0`, 15 min, Tempo's `reth-state-root` harness unchanged).
   `eth_getMultiProof proofs verify against the model's state root` failed 169 times; in each, an
   embedded leaf was returned as its own proof node. That harness shapes keys at run time, which
   is an accelerator rather than realistic traffic.
@@ -319,8 +319,8 @@ Tempo's own assertions in the node ("Follower canonical block matches the settle
 
 | Run | Template | Faults | Length, tier |
 |---|---|---|---|
-| [`06d7a6f20b71bce259a9be336de8bac0-67-0`](https://tempo.antithesis.com/run?run_id=06d7a6f20b71bce259a9be336de8bac0-67-0) | `zone_dist` | `basic_test` default: network faults on every container, including zone-to-L1 links; no node faults | 30 min, turbo (100.3 compute hours) |
-| [`8d428ae3758d98a507f4e1de6c86ac40-67-0`](https://tempo.antithesis.com/run?run_id=8d428ae3758d98a507f4e1de6c86ac40-67-0) | `zone_recovery` | `high_availability` (node pause, throttle, stop, kill; partitions; clock), with `l1`, `workload` and `provision` excluded | 30 min, turbo |
+| `06d7a6f20b71bce259a9be336de8bac0-67-0` | `zone_dist` | `basic_test` default: network faults on every container, including zone-to-L1 links; no node faults | 30 min, turbo (100.3 compute hours) |
+| `8d428ae3758d98a507f4e1de6c86ac40-67-0` | `zone_recovery` | `high_availability` (node pause, throttle, stop, kill; partitions; clock), with `l1`, `workload` and `provision` excluded | 30 min, turbo |
 
 Both were launched with `--filter-logs-matching ' INFO reth_node_events::node'` to drop per-block
 log lines. Build and launch commands are in [README.md](README.md).
