@@ -260,7 +260,7 @@ the tests detect each one. The full write-up is `contrib/antithesis/FINDINGS-ret
 
 ## P1. Inline witness children (SIGP-334): detected
 
- A witness or proof mishandles a trie node small
+A witness or proof mishandles a trie node small
 enough to be embedded in its parent.
 
 - *Realistic traffic, no mined keys* (run `6c31e497e76ccd1852459d3efe06d823-67-0`, 60 min, faults off). A driver pays small
@@ -279,14 +279,14 @@ enough to be embedded in its parent.
 
 ## P2 and P3. Proof target bugs and the `node_iter` revert: not detected
 
- Every existing root and prover
+Every existing root and prover
 check passed on the planted pin, including three per-block model-against-node checks added to
 `reth-state-root` for this purpose. From reading the code, not from a run: the `node_iter` change
 should give a wrong incremental state root, but only for a trie shape (three nested stored
 branches under an extension) that neither harness produced; no definite symptom was derived for
 the proof target change.
 
-Limits of this track: the runs show the symptom on the planted pin and its absence on fixed Reth
+Limits of this part: the runs show the symptom on the planted pin and its absence on fixed Reth
 but do not bisect Reth; there is no fixed-Reth control for the realistic workload itself; and
 this part did not get the second-pass review that Part 1 did.
 
