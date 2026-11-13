@@ -1,0 +1,26 @@
+seed: funded 8 zone accounts
+[21:50:24] image: tempo-zones-antithesis:pristine
+[21:50:24] settlement batches so far: leader zone-0=15
+[21:50:24] === forking the leader ===
+[21:51:07] restarted leader
+AccountsHistory: healing via changesets checkpoint=153 sf_tip=156
+[21:51:21] zone-0 tip=183 hash@156=0xddab7d6539d9851588ad16edaf414e6bd95578ef888b4718141f6d45dfad0d36
+[21:51:22] zone-1 tip=156 hash@156=0x24f3b06b3b7b10fc52d6766e7fa513c286dfcc9556690e5ca49c0194f53979d3
+[21:51:22] zone-2 tip=156 hash@156=0x24f3b06b3b7b10fc52d6766e7fa513c286dfcc9556690e5ca49c0194f53979d3
+[21:51:22] zone-rpc tip=156 hash@156=0x24f3b06b3b7b10fc52d6766e7fa513c286dfcc9556690e5ca49c0194f53979d3
+2026-11-13T21:51:08.288681Z ERROR zone::p2p: Rejected duplicate or conflicting peer block err=peer block conflicts with canonical block at height 154: local=0x98b6017cc70163deee709c16508141c295e4e56c7ab19c72b42525a9f6b2d271, received=0x1e9e2832b5397bb185f8523f03e13ea22f42c436e7e351c002b05b1a6b1f74c5
+2026-11-13T21:51:08.408161Z ERROR zone::p2p: Rejected duplicate or conflicting peer block err=peer block conflicts with canonical block at height 155: local=0x7ecb511f4a8786dce69161f79aa6a6a5c26c5ca1502dfdb426110fef55365181, received=0xdc6420752f636d8034af0b2957004e2da6b52b3173dfca85929e5495b71a3011
+[21:51:22] *** PERMANENT FORK at 156 ***
+[21:51:23] === post-fork: tx sent to the LEADER's RPC ===
+blockNumber          187
+status               1 (success)
+transactionHash      0x6b805b7d4abfc1e83a3092d9e8dbb879b0a6d0616199dd448f4b40e65a57c39f
+[21:51:23] === waiting 5 minutes ===
+[21:56:24] zone-0 tip=787 hash@156=0xddab7d6539d9851588ad16edaf414e6bd95578ef888b4718141f6d45dfad0d36 receipt(0x6b805b7d4abfc1e83a3092d9e8dbb879b0a6d0616199dd448f4b40e65a57c39f)=187
+# Checked about 10 minutes after the fork with eth_getTransactionReceipt; cast receipt blocks waiting on followers:
+zone-0 (leader) tip=1198 receipt(0x6b805b7d…c39f)={"status":"0x1", blockNumber 187}
+zone-1          tip=156  receipt=null
+zone-2          tip=156  receipt=null
+zone-rpc        tip=156  receipt=null
+leader "Batch submitted to L1": 15 before the fork, 15 after (none since the fork)
+zone-1 over 10 min: 1044x "Rejected settlement proposal ... does not match", 68x "... not durable", 493x "peer block parent mismatch"

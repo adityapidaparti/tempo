@@ -1,0 +1,1529 @@
+diff --git a/contrib/antithesis/zones/Dockerfile b/contrib/antithesis/zones/Dockerfile
+index 371bd43b..db38c407 100644
+--- a/contrib/antithesis/zones/Dockerfile
++++ b/contrib/antithesis/zones/Dockerfile
+@@ -99,11 +99,16 @@ RUN /out/tempo-xtask generate-genesis --output /genesis --accounts 20 --no-dkg-i
+         --specs-out /app/crates/zones/contracts/out \
+         --output /genesis/l1-genesis.json
+ 
++# Test-only slow-disk shim (see shim/slowsync.c), built apart from the Rust toolchain cache.
++FROM rust:1.96-bookworm@sha256:5e2214abe154fe26e39f64488952e5c991eeed1d6d6da7cc8381ae83927f0cfc AS shim
++COPY contrib/antithesis/zones/shim/slowsync.c /src/slowsync.c
++RUN gcc -shared -fPIC -O2 -o /libslowsync.so /src/slowsync.c -ldl
++
+ FROM debian:bookworm-slim@sha256:7ff6ba31527b9e336162fa061746c366c4b2032f4d2cff2078bea43f78efe3f8 AS runtime
+ 
+ # gdb lets debugging sessions attach to the nodes (gdb -p) or open their core dumps.
+ RUN apt-get update && apt-get install -y --no-install-recommends \
+-    ca-certificates jq gdb \
++    ca-certificates jq gdb libfaketime \
+     && rm -rf /var/lib/apt/lists/*
+ 
+ COPY --from=builder /out/ /usr/local/bin/
+@@ -111,6 +116,7 @@ COPY --from=solidity /root/.foundry/bin/cast /usr/local/bin/cast
+ COPY --from=solidity /app/crates/zones/contracts/out /app/crates/zones/contracts/out
+ COPY --from=l1-genesis /genesis/l1-genesis.json /opt/zones/l1-genesis.json
+ COPY contrib/antithesis/zones/scripts/ /opt/zones/
++COPY --from=shim /libslowsync.so /usr/local/lib/libslowsync.so
+ 
+ # Antithesis reads the symbols of instrumented binaries from /symbols; the binaries keep theirs.
+ RUN mkdir /symbols && for bin in tempo tempo-zone tempo-xtask tempo-zone-xtask; do \
+diff --git a/contrib/antithesis/zones/Dockerfile.dockerignore b/contrib/antithesis/zones/Dockerfile.dockerignore
+index 5864c801..a79a9ea1 100644
+--- a/contrib/antithesis/zones/Dockerfile.dockerignore
++++ b/contrib/antithesis/zones/Dockerfile.dockerignore
+@@ -7,6 +7,7 @@ contrib/
+ !contrib/antithesis/trie-shapes/Cargo.toml
+ !contrib/antithesis/trie-shapes/src/**
+ !contrib/antithesis/zones/scripts/**
++!contrib/antithesis/zones/shim/**
+ !contrib/antithesis/zones/test/**
+ docs/
+ localnet/
+diff --git a/contrib/antithesis/zones/README.md b/contrib/antithesis/zones/README.md
+index def37254..82ee2da8 100644
+--- a/contrib/antithesis/zones/README.md
++++ b/contrib/antithesis/zones/README.md
+@@ -61,6 +61,7 @@ images it is given, so they must be in the image rather than copied in when a co
+ | `serial_driver_quorum_loss_recovery` | Holds both followers down, proves a newly executed canary cannot settle at 1-of-3, then restores one follower and requires its fresh quorum participation |
+ | `serial_driver_handoff_campaign` | Rotates to a stopped, lagging successor, optionally returns A→B→A before B can activate, then requires fresh final-term settlement and exact predecessor preservation |
+ | `serial_driver_asymmetric_handoff` | Gates the old leader's L1 connection and the successor's P2P traffic, proves signed transactions remain pending across the Portal handoff, then heals and requires fresh settlement |
++| `serial_driver_lagging_backfill_crash` | In a quiet window, six times: holds a follower down 10-30 s, releases it to backfill from the leader, SIGKILLs and restarts the leader 0-4 s later (or as soon as the follower's head moves), then requires all nodes to hold identical blocks at every common height within 180 s |
+ | `serial_driver_recovery` | Pauses faults for 600 seconds, then proves a fresh canary settles on finalized L1 and all nodes preserve its receipt and the prior settled prefix within 300 seconds |
+ | `anytime_consistency` | Nodes that reached the height L1 settled agree on its hash and on balances there, settled workload transactions stay final, and every zone block comes from the leader the portal names at its Tempo anchor; reconciles persistent handoff history |
+ | `eventually_settled` | After faults stop, resolves every durable signed intent first, then every confirmed deposit is credited or refunded and every confirmed withdrawal is paid or returned, and all nodes converge |
+diff --git a/contrib/antithesis/zones/scripts/zone-node.sh b/contrib/antithesis/zones/scripts/zone-node.sh
+index def83271..24b5cf37 100755
+--- a/contrib/antithesis/zones/scripts/zone-node.sh
++++ b/contrib/antithesis/zones/scripts/zone-node.sh
+@@ -33,6 +33,29 @@ if [ "$NODE" != rpc ]; then
+ fi
+ # The proxy changes TCP source IPs; P2P cryptographic peer authentication stays enabled.
+ 
++# Test-only per-node wall-clock offset (models an NTP step on one machine). Antithesis clock
++# faults move every container's clock together, so relative skew between sequencers needs this.
++# The offset is read from /fault-control/clock-<node> ("+0", "+600", ...); only CLOCK_REALTIME
++# is shifted, monotonic timers are untouched.
++FAKETIME_LIB=/usr/lib/x86_64-linux-gnu/faketime/libfaketime.so.1
++# Test-only slow disk: delay MDBX fsync/msync by /fault-control/fsync-<node> milliseconds.
++if [ "$NODE" != rpc ] && [ -d /fault-control ] && [ -f /usr/local/lib/libslowsync.so ]; then
++    [ -f "/fault-control/fsync-$NODE" ] || echo 0 > "/fault-control/fsync-$NODE"
++    export LD_PRELOAD=/usr/local/lib/libslowsync.so
++    export SLOWSYNC_CONTROL=/fault-control/fsync-$NODE
++fi
++# libfaketime clashes with jemalloc's init (recursive clock_gettime), so the clock offset is
++# opt-in until that is solved.
++if [ "${ZONE_FAKETIME:-0}" = 1 ] && [ "$NODE" != rpc ] && [ -d /fault-control ] && [ -f "$FAKETIME_LIB" ]; then
++    CLOCK_FILE=/fault-control/clock-$NODE
++    [ -f "$CLOCK_FILE" ] || echo "+0" > "$CLOCK_FILE"
++    export LD_PRELOAD="$FAKETIME_LIB ${LD_PRELOAD:-}"
++    export FAKETIME_TIMESTAMP_FILE=$CLOCK_FILE
++    export FAKETIME_CACHE_DURATION=1
++    export FAKETIME_DONT_FAKE_MONOTONIC=1
++    export FAKETIME_DONT_RESET=1
++fi
++
+ # shellcheck disable=SC2086
+ exec /usr/local/bin/tempo-zone node \
+     --chain "$S/genesis.json" \
+diff --git a/xtask/zones-antithesis/src/checks.rs b/xtask/zones-antithesis/src/checks.rs
+index 2d72e89d..005c2d3e 100644
+--- a/xtask/zones-antithesis/src/checks.rs
++++ b/xtask/zones-antithesis/src/checks.rs
+@@ -10,7 +10,10 @@ use antithesis_sdk::{assert_always, assert_sometimes};
+ use eyre::WrapErr as _;
+ use futures::{StreamExt as _, TryStreamExt as _, stream};
+ use serde_json::json;
+-use std::{collections::BTreeMap, time::Duration};
++use std::{
++    collections::{BTreeMap, BTreeSet},
++    time::Duration,
++};
+ use tempo_contracts::{
+     precompiles::{ITIP20, PATH_USD_ADDRESS},
+     zones::{
+@@ -35,6 +38,24 @@ const SAMPLE: usize = 16;
+ const LOG_CHUNK: u64 = 10_000;
+ /// Concurrent balance reads in `check-ledger`.
+ const BALANCE_READS: usize = 32;
++/// Consecutive heights ending at the common tip that the fork detector always compares.
++const FORK_WINDOW: u64 = 20;
++/// Random earlier heights the fork detector compares in addition to the window.
++const FORK_SAMPLE: usize = 4;
++/// Bounds the heights one fork observation compares, keeping the newest.
++const MAX_FORK_HEIGHTS: usize = 512;
++/// A first divergence is re-read after this delay, so only a persistent fork fails the property.
++const FORK_RECHECK_DELAY: Duration = Duration::from_secs(2);
++
++/// Block hashes that zone nodes reported at heights all reachable nodes have reached.
++pub(super) struct ForkObservation {
++    /// Lowest tip among reachable nodes; `None` when fewer than two nodes answered.
++    pub(super) common_tip: Option<u64>,
++    /// Nodes whose tip or blocks could not be read.
++    pub(super) unreachable: Vec<String>,
++    /// Heights where reachable nodes still disagreed after a re-read, with each node's hash.
++    pub(super) divergent: BTreeMap<u64, BTreeMap<String, B256>>,
++}
+ 
+ impl Context {
+     pub(super) async fn check_consistency(&self) -> eyre::Result<()> {
+@@ -50,6 +71,8 @@ impl Context {
+             result => result?,
+         }
+ 
++        self.observe_forks(None, "check-consistency").await;
++
+         // A zone block must come from the sequencer the portal names leader at the Tempo block
+         // the zone block anchors to: a handoff takes effect at its activation block. Checked at
+         // each node's tip, where a handoff shows first, and at one earlier block. A node that
+@@ -217,6 +240,118 @@ impl Context {
+         Ok(())
+     }
+ 
++    /// Compares block hashes across every reachable zone node at heights they all hold: the
++    /// newest [`FORK_WINDOW`] heights up to the lowest tip, a random sample below it, and every
++    /// height from `from` when given. Asserts no persistent divergence; unreachable nodes are
++    /// skipped, so this never fails on RPC errors.
++    pub(super) async fn observe_forks(&self, from: Option<u64>, source: &str) -> ForkObservation {
++        let mut unreachable = Vec::new();
++        let tips = futures::future::join_all(
++            self.zones
++                .iter()
++                .map(|zone| async move { zone.get_block_number().await }),
++        )
++        .await;
++        let mut reachable = Vec::new();
++        for (node, tip) in tips.into_iter().enumerate() {
++            match tip {
++                Ok(tip) => reachable.push((node, tip)),
++                Err(_) => unreachable.push(self.zone_urls[node].to_string()),
++            }
++        }
++        let tips: BTreeMap<String, u64> = reachable
++            .iter()
++            .map(|&(node, tip)| (self.zone_urls[node].to_string(), tip))
++            .collect();
++        let common_tip = (reachable.len() >= 2)
++            .then(|| reachable.iter().map(|&(_, tip)| tip).min())
++            .flatten();
++        let Some(tip) = common_tip else {
++            return ForkObservation {
++                common_tip,
++                unreachable,
++                divergent: BTreeMap::new(),
++            };
++        };
++        let mut heights: BTreeSet<u64> = (tip.saturating_sub(FORK_WINDOW - 1)..=tip).collect();
++        heights.extend((0..FORK_SAMPLE).map(|_| random_below(tip.saturating_add(1))));
++        if let Some(from) = from {
++            heights.extend(from.min(tip)..=tip);
++        }
++        let heights: Vec<u64> = heights.into_iter().rev().take(MAX_FORK_HEIGHTS).collect();
++        let nodes: Vec<usize> = reachable.iter().map(|&(node, _)| node).collect();
++
++        let mut divergent = self.divergent_heights(&nodes, &heights, &mut unreachable).await;
++        if !divergent.is_empty() {
++            // Only nodes and heights that disagreed are re-read.
++            tokio::time::sleep(FORK_RECHECK_DELAY).await;
++            let heights: Vec<u64> = divergent.keys().copied().collect();
++            divergent = self.divergent_heights(&nodes, &heights, &mut unreachable).await;
++        }
++        assert_always!(
++            divergent.is_empty(),
++            "Zone nodes never hold different blocks at the same height",
++            &json!({
++                "source": source,
++                "common_tip": tip,
++                "tips": tips,
++                "from": from,
++                "compared_heights": heights.len(),
++                "divergent": divergent,
++                "unreachable": unreachable,
++            })
++        );
++        ForkObservation {
++            common_tip,
++            unreachable,
++            divergent,
++        }
++    }
++
++    /// Reads each node's block hash at `heights` and returns those where nodes disagree. A node
++    /// that errors is recorded in `unreachable` and contributes no further hashes.
++    async fn divergent_heights(
++        &self,
++        nodes: &[usize],
++        heights: &[u64],
++        unreachable: &mut Vec<String>,
++    ) -> BTreeMap<u64, BTreeMap<String, B256>> {
++        let reads = futures::future::join_all(nodes.iter().map(|&node| async move {
++            let mut hashes = BTreeMap::new();
++            for &height in heights {
++                match self.zones[node]
++                    .get_block_by_number(BlockNumberOrTag::Number(height))
++                    .await
++                {
++                    Ok(Some(block)) => {
++                        hashes.insert(height, block.header.hash);
++                    }
++                    // A node may have rewound past a block it reported; nothing to compare.
++                    Ok(None) => {}
++                    Err(_) => return (node, hashes, false),
++                }
++            }
++            (node, hashes, true)
++        }))
++        .await;
++        let mut by_height: BTreeMap<u64, BTreeMap<String, B256>> = BTreeMap::new();
++        for (node, hashes, complete) in reads {
++            let url = self.zone_urls[node].to_string();
++            if !complete && !unreachable.contains(&url) {
++                unreachable.push(url.clone());
++            }
++            for (height, hash) in hashes {
++                by_height.entry(height).or_default().insert(url.clone(), hash);
++            }
++        }
++        by_height.retain(|_, hashes| {
++            let mut values = hashes.values();
++            let first = values.next();
++            !values.all(|hash| Some(hash) == first)
++        });
++        by_height
++    }
++
+     pub(super) async fn check_settled(&self) -> eyre::Result<()> {
+         let mut state = None;
+         let result = bounded_check(SETTLE_TIMEOUT, async {
+diff --git a/xtask/zones-antithesis/src/handoff.rs b/xtask/zones-antithesis/src/handoff.rs
+index 55674721..e84de78f 100644
+--- a/xtask/zones-antithesis/src/handoff.rs
++++ b/xtask/zones-antithesis/src/handoff.rs
+@@ -4,7 +4,7 @@ use alloy::{
+     network::AnyTransactionReceipt,
+     primitives::{Address, B256, U256},
+     providers::Provider as _,
+-    rpc::types::{BlockId, BlockNumberOrTag, Filter, Log},
++    rpc::types::{BlockId, BlockNumberOrTag, Filter, Log, TransactionReceipt},
+     sol_types::SolEvent as _,
+ };
+ use antithesis_sdk::{assert_always, assert_reachable, assert_sometimes};
+@@ -146,21 +146,7 @@ impl Context {
+                 .wrap_err("failed reading relayed handoff event")?;
+             (tx, handoff_applied(&logs, self.portal, tx))
+         } else {
+-            let transaction = portal.setLeader(target, epoch).into_transaction_request();
+-            let intent = self
+-                .prepare_intent(
+-                    &admin,
+-                    Chain::L1,
+-                    0,
+-                    transaction,
+-                    Effect::Leadership { target },
+-                )
+-                .await?;
+-            // An interruption before this link still leaves a drainable Leadership intent.
+-            request.l1_tx = Some(intent.tx);
+-            self.ledger
+-                .append(&Record::HandoffRequest(request.clone()))?;
+-            let receipt = self.send_intent(&intent).await?;
++            let receipt = self.submit_handoff(&admin, &mut request).await?;
+             let tx = receipt.transaction_hash;
+             (tx, handoff_applied(receipt.inner.logs(), self.portal, tx))
+         };
+@@ -239,6 +225,34 @@ impl Context {
+         Ok(())
+     }
+ 
++    /// Journals and submits an admin handoff, returning at receipt confirmation, before finality.
++    /// The caller holds the episode lock and the admin's account lease.
++    pub(super) async fn submit_handoff(
++        &self,
++        admin: &Account,
++        request: &mut Request,
++    ) -> eyre::Result<TransactionReceipt> {
++        let transaction = ZonePortal::new(self.portal, &self.l1)
++            .setLeader(request.target, request.expected_epoch)
++            .into_transaction_request();
++        let intent = self
++            .prepare_intent(
++                admin,
++                Chain::L1,
++                0,
++                transaction,
++                Effect::Leadership {
++                    target: request.target,
++                },
++            )
++            .await?;
++        // An interruption before this link still leaves a drainable Leadership intent.
++        request.l1_tx = Some(intent.tx);
++        self.ledger
++            .append(&Record::HandoffRequest(request.clone()))?;
++        self.send_intent(&intent).await
++    }
++
+     /// Sends only journaled admin transactions and returns the exact finalized transition.
+     /// The caller bounds this operation and holds the exclusive episode lock.
+     pub(super) async fn campaign_handoff(
+@@ -678,7 +692,8 @@ fn relay_refused_before_submission(error: &alloy::transports::TransportError) ->
+     })
+ }
+ 
+-fn handoff_applied(logs: &[Log], portal: Address, tx: B256) -> bool {
++/// Whether this exact transaction emitted a non-removed leadership event from the portal.
++pub(super) fn handoff_applied(logs: &[Log], portal: Address, tx: B256) -> bool {
+     logs.iter().any(|log| {
+         !log.removed
+             && log.address() == portal
+diff --git a/xtask/zones-antithesis/src/main.rs b/xtask/zones-antithesis/src/main.rs
+index 7e5ab91f..0f9827aa 100644
+--- a/xtask/zones-antithesis/src/main.rs
++++ b/xtask/zones-antithesis/src/main.rs
+@@ -40,6 +40,7 @@ mod checks;
+ mod effects;
+ mod handoff;
+ mod intents;
++mod lagging;
+ mod ledger;
+ mod outage;
+ mod proxy;
+@@ -167,6 +168,14 @@ enum Command {
+     },
+     /// Hands leadership across asymmetric L1/P2P views with an observed pending payment pipeline.
+     AsymmetricHandoff,
++    /// Crashes the leader during follower backfill or a leadership drain, then requires every
++    /// zone node to hold the same block at every common height and keep advancing.
++    LaggingBackfillCrash {
++        /// Runs one episode under the shared lock while platform faults continue; only a fork
++        /// fails it, setup and timeout failures are inconclusive.
++        #[arg(long)]
++        no_quiet: bool,
++    },
+     /// Runs one transparent test-only L1/P2P gate without connecting to zone RPC.
+     FaultProxy {
+         /// Controlled sequencer index (0, 1, or 2).
+@@ -196,6 +205,7 @@ impl Antithesis {
+             let lock = ctx.ledger.episode_lock(true).await?;
+             proxy::release_network_faults(&self.fault_control_dir).await?;
+             ctx.release_outages(&self.fault_control_dir).await?;
++            lagging::release_slow_fsync(&self.fault_control_dir)?;
+             Some(lock)
+         } else if matches!(
+             self.command,
+@@ -244,6 +254,11 @@ impl Antithesis {
+             Command::AsymmetricHandoff => {
+                 return ctx.asymmetric_handoff(&self.fault_control_dir).await;
+             }
++            Command::LaggingBackfillCrash { no_quiet } => {
++                return ctx
++                    .lagging_backfill_crash(&self.fault_control_dir, !no_quiet)
++                    .await;
++            }
+             Command::FaultProxy { .. } => unreachable!("fault proxy dispatched before RPC setup"),
+             Command::ReleaseOutages => return Ok(()),
+             Command::Deposit => ctx.deposit().await,
+@@ -1064,6 +1079,18 @@ mod cli_tests {
+                 .command,
+             Command::QuorumLossRecovery
+         ));
++        assert!(matches!(
++            Antithesis::try_parse_from(["zones", "lagging-backfill-crash"])
++                .unwrap()
++                .command,
++            Command::LaggingBackfillCrash { no_quiet: false }
++        ));
++        assert!(matches!(
++            Antithesis::try_parse_from(["zones", "lagging-backfill-crash", "--no-quiet"])
++                .unwrap()
++                .command,
++            Command::LaggingBackfillCrash { no_quiet: true }
++        ));
+         assert!(matches!(
+             Antithesis::try_parse_from([
+                 "zones",
+diff --git a/contrib/antithesis/zones/shim/slowsync.c b/contrib/antithesis/zones/shim/slowsync.c
+new file mode 100644
+index 00000000..af9aedb3
+--- /dev/null
++++ b/contrib/antithesis/zones/shim/slowsync.c
+@@ -0,0 +1,79 @@
++// Test-only slow-disk shim: delays fsync-family calls that target MDBX data files by the number
++// of milliseconds in $SLOWSYNC_CONTROL (re-read at most every 200 ms). Models a slow disk; it
++// changes no data and no ordering, only how long the durability barrier takes.
++#define _GNU_SOURCE
++#include <dlfcn.h>
++#include <fcntl.h>
++#include <stdio.h>
++#include <stdlib.h>
++#include <string.h>
++#include <sys/mman.h>
++#include <time.h>
++#include <unistd.h>
++
++static long cached_ms = 0;
++static struct timespec last_read = {0, 0};
++
++static long delay_ms(void) {
++    struct timespec now;
++    clock_gettime(CLOCK_MONOTONIC, &now);
++    long elapsed = (now.tv_sec - last_read.tv_sec) * 1000 + (now.tv_nsec - last_read.tv_nsec) / 1000000;
++    if (last_read.tv_sec != 0 && elapsed < 200) return cached_ms;
++    last_read = now;
++    const char *path = getenv("SLOWSYNC_CONTROL");
++    long ms = 0;
++    if (path) {
++        FILE *f = fopen(path, "r");
++        if (f) { if (fscanf(f, "%ld", &ms) != 1) ms = 0; fclose(f); }
++    }
++    if (ms < 0 || ms > 60000) ms = 0;
++    cached_ms = ms;
++    return ms;
++}
++
++static int is_mdbx_fd(int fd) {
++    char link[64], target[512];
++    snprintf(link, sizeof link, "/proc/self/fd/%d", fd);
++    ssize_t n = readlink(link, target, sizeof target - 1);
++    if (n <= 0) return 0;
++    target[n] = 0;
++    return strstr(target, "mdbx.dat") != NULL;
++}
++
++static void maybe_sleep(int is_mdbx) {
++    if (!is_mdbx) return;
++    long ms = delay_ms();
++    if (ms <= 0) return;
++    struct timespec ts = {ms / 1000, (ms % 1000) * 1000000};
++    nanosleep(&ts, NULL);
++}
++
++int fsync(int fd) {
++    static int (*real)(int);
++    if (!real) real = dlsym(RTLD_NEXT, "fsync");
++    maybe_sleep(is_mdbx_fd(fd));
++    return real(fd);
++}
++
++int fdatasync(int fd) {
++    static int (*real)(int);
++    if (!real) real = dlsym(RTLD_NEXT, "fdatasync");
++    maybe_sleep(is_mdbx_fd(fd));
++    return real(fd);
++}
++
++int sync_file_range(int fd, off64_t off, off64_t n, unsigned int flags) {
++    static int (*real)(int, off64_t, off64_t, unsigned int);
++    if (!real) real = dlsym(RTLD_NEXT, "sync_file_range");
++    maybe_sleep(is_mdbx_fd(fd));
++    return real(fd, off, n, flags);
++}
++
++// MDBX in the default (non-WRITEMAP) mode syncs with fdatasync/fsync; in WRITEMAP mode with msync.
++// msync carries no fd, so delay every MS_SYNC msync (only MDBX uses synchronous msync here).
++int msync(void *addr, size_t len, int flags) {
++    static int (*real)(void *, size_t, int);
++    if (!real) real = dlsym(RTLD_NEXT, "msync");
++    maybe_sleep((flags & MS_SYNC) != 0);
++    return real(addr, len, flags);
++}
+diff --git a/contrib/antithesis/zones/test/v1/zone_payments/parallel_driver_lagging_backfill_crash_noquiet b/contrib/antithesis/zones/test/v1/zone_payments/parallel_driver_lagging_backfill_crash_noquiet
+new file mode 100755
+index 00000000..4a67fec6
+--- /dev/null
++++ b/contrib/antithesis/zones/test/v1/zone_payments/parallel_driver_lagging_backfill_crash_noquiet
+@@ -0,0 +1,6 @@
++#!/bin/sh
++set -eu
++
++# One lagging-backfill-crash episode under the shared episode lock while platform faults keep
++# running. Only a fork fails it; setup and timeout failures are logged as inconclusive.
++exec timeout --signal=TERM --kill-after=10s 1500s tempo-zones-antithesis lagging-backfill-crash --no-quiet
+diff --git a/contrib/antithesis/zones/test/v1/zone_payments/serial_driver_lagging_backfill_crash b/contrib/antithesis/zones/test/v1/zone_payments/serial_driver_lagging_backfill_crash
+new file mode 100755
+index 00000000..aa18cfe2
+--- /dev/null
++++ b/contrib/antithesis/zones/test/v1/zone_payments/serial_driver_lagging_backfill_crash
+@@ -0,0 +1,10 @@
++#!/bin/sh
++set -eu
++
++# Isolate controlled follower lags (P2P gates or restarts), leader SIGKILLs and leader slow-fsync
++# from unrelated platform/container faults. The command owns cleanup; terminal commands also
++# release gates, holds and slow-fsync after cancellation.
++if [ -n "${ANTITHESIS_STOP_FAULTS:-}" ]; then
++    "$ANTITHESIS_STOP_FAULTS" 1800
++fi
++exec timeout --signal=TERM --kill-after=10s 1500s tempo-zones-antithesis lagging-backfill-crash
+diff --git a/xtask/zones-antithesis/src/lagging.rs b/xtask/zones-antithesis/src/lagging.rs
+new file mode 100644
+index 00000000..9c9d1930
+--- /dev/null
++++ b/xtask/zones-antithesis/src/lagging.rs
+@@ -0,0 +1,1006 @@
++//! Crashes the leader during follower backfill or a leadership drain.
++//!
++//! Targets the window where the leader's persisted tip (`last_block_number`, the static-file tip)
++//! runs ahead of the database commit: a block served from that window and then lost to SIGKILL
++//! would be rebuilt differently at the same height, forking every follower that holds it. A
++//! test-only slow-fsync shim on the leader widens that window.
++
++use alloy::{
++    primitives::{Address, B256},
++    providers::{DynProvider, Provider as _},
++    rpc::types::{BlockId, BlockNumberOrTag},
++};
++use antithesis_sdk::{assert_always, assert_reachable, assert_sometimes};
++use eyre::{OptionExt as _, WrapErr as _};
++use serde::Serialize;
++use serde_json::json;
++use std::{
++    fmt, fs,
++    path::{Path, PathBuf},
++    time::Duration,
++};
++use tokio::time::{Instant, timeout};
++
++use super::{
++    ADMIN_INDEX, Account, Context, SEQUENCER_INDICES,
++    handoff::{Request, handoff_applied},
++    outage::Hold,
++    proxy::{Fault, release_network_faults},
++    random_below, random_index,
++    recovery::recover_until,
++};
++
++const EPISODES: usize = 6;
++const PRECONDITION_TIMEOUT: Duration = Duration::from_secs(180);
++// Stays below the supervisor's independent 180-second hold watchdog.
++const HOLD_TIMEOUT: Duration = Duration::from_secs(150);
++/// Bounds installing the P2P gate and holding it for at most [`MAX_GATE_MS`].
++const GATE_TIMEOUT: Duration = Duration::from_secs(150);
++/// Added to the gate duration for the lease deadline, the proxies' own release backstop.
++const GATE_LEASE_MARGIN: Duration = Duration::from_secs(20);
++const HEAL_TIMEOUT: Duration = Duration::from_secs(30);
++const RESTART_TIMEOUT: Duration = Duration::from_secs(60);
++const CONVERGENCE_TIMEOUT: Duration = Duration::from_secs(180);
++/// Follower process hold duration, in milliseconds.
++const MIN_HOLD_MS: u64 = 10_000;
++const MAX_HOLD_MS: u64 = 30_000;
++/// Follower P2P gate duration, in milliseconds.
++const MIN_GATE_MS: u64 = 10_000;
++const MAX_GATE_MS: u64 = 120_000;
++/// Upper bound of the random delay before the leader is killed, in milliseconds.
++const MAX_TRIGGER_DELAY_MS: u64 = 1_500;
++/// How long a trigger waits for the follower's head to move before firing anyway.
++const TRIGGER_WATCH: Duration = Duration::from_secs(60);
++const TRIGGER_POLL: Duration = Duration::from_millis(20);
++/// Bounds tip reads around the leader kill, so a starting node cannot delay it.
++const TIP_READ_TIMEOUT: Duration = Duration::from_millis(500);
++/// Leader MDBX fsync delays, in milliseconds, chosen per episode.
++const FSYNC_DELAYS_MS: [u64; 7] = [0, 200, 1_000, 5_000, 20_000, 45_000, 45_000];
++/// Delays that widen the outgoing leader's commit window during a drain.
++const DRAIN_FSYNC_DELAYS_MS: [u64; 5] = [600, 2_000, 5_000, 20_000, 45_000];
++const MAX_BLIND_DRAIN_MS: u64 = 3_000;
++/// Longer than a single slow commit; an unchanged 20 ms sample is not a stopped head.
++const DRAIN_STALL: Duration = Duration::from_secs(3);
++/// Below the wrapper's 1500-second timeout, so cancellation never cuts an episode short.
++const BUDGET: Duration = Duration::from_secs(1400);
++/// A new episode starts only with this much budget left: the worst-case episode.
++const EPISODE_RESERVE: Duration = Duration::from_secs(750);
++
++/// Asserts a phase outcome while faults are quiet; otherwise a failure is only logged as
++/// inconclusive and still returned, so the episode stops without further faults.
++macro_rules! phase {
++    ($quiet:expr, $message:literal, $duration:expr, $work:expr) => {{
++        let result = timeout($duration, $work)
++            .await
++            .wrap_err(concat!($message, ": timed out"))
++            .and_then(|result| result);
++        if $quiet {
++            assert_always!(
++                result.is_ok(),
++                concat!("Lagging backfill crash: ", $message),
++                &json!({"error": result.as_ref().err().map(|error| format!("{error:#}"))})
++            );
++        } else if let Err(error) = &result {
++            println!(
++                "lagging-backfill-crash: {}",
++                json!({"result": "INCONCLUSIVE", "phase": $message,
++                    "error": format!("{error:#}")})
++            );
++        }
++        result.wrap_err($message)
++    }};
++}
++
++/// How the follower is made to lag behind the leader.
++#[derive(Debug, Clone, Copy, Serialize)]
++#[serde(rename_all = "snake_case")]
++enum Lag {
++    /// The follower's P2P traffic is gated, then healed.
++    Gate,
++    /// The follower process is killed, then restarted.
++    Restart,
++    /// No lag: the leader's commit stalls long enough that the follower's inactivity probe
++    /// backfills the leader's finalized-but-uncommitted tip.
++    Probe,
++}
++
++/// When the leader is killed after releasing a follower or confirming a handoff.
++#[derive(Debug, Clone, Copy, Serialize)]
++#[serde(rename_all = "snake_case")]
++enum Trigger {
++    /// A random delay after the follower's head first passes its pre-release tip.
++    HeadMoves { delay_ms: u64 },
++    /// A random delay after releasing the follower or confirming the handoff.
++    Blind { delay_ms: u64 },
++    /// A random delay after successor production, an epoch change, or a stopped leader head.
++    Drain {
++        delay_ms: u64,
++        leader: usize,
++        leader_head: Head,
++        successor: Address,
++        epoch: u64,
++    },
++}
++
++/// A head observation, including the producer that identifies successor production.
++#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
++struct Head {
++    height: u64,
++    hash: B256,
++    producer: Address,
++}
++
++/// Marks a persistent fork, which fails the command even when faults are not quiet.
++#[derive(Debug)]
++struct Forked;
++
++impl fmt::Display for Forked {
++    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
++        f.write_str("zone nodes hold different blocks at the same height")
++    }
++}
++
++impl std::error::Error for Forked {}
++
++impl Context {
++    /// With `quiet`, repeats bounded episodes under the exclusive episode lock: unprovable
++    /// handoff quiescence skips before any kill, and a started episode fails on timeouts or
++    /// missing evidence. Without it, runs one episode under the shared lock while platform
++    /// faults continue; only a fork fails it, anything else is inconclusive.
++    pub(super) async fn lagging_backfill_crash(
++        &self,
++        dir: &Path,
++        quiet: bool,
++    ) -> eyre::Result<()> {
++        let started = Instant::now();
++        let mut executed = 0;
++        let result = timeout(BUDGET, async {
++            let _lock = self.ledger.episode_lock(quiet).await?;
++            if quiet {
++                release_network_faults(dir).await?;
++                self.release_outages(dir).await?;
++                release_slow_fsync(dir)?;
++            }
++            eyre::ensure!(
++                self.zones.len() == 4,
++                "lagging backfill crash requires three sequencers and one RPC-only node"
++            );
++            let drained = recover_until(Instant::now() + PRECONDITION_TIMEOUT, async || {
++                let ready = self.handoffs_drained().await?;
++                if !ready {
++                    self.reconcile_intents().await?;
++                }
++                Ok(ready.then_some(()))
++            })
++            .await;
++            if drained.as_ref().is_err_and(|error| {
++                error.downcast_ref::<tokio::time::error::Elapsed>().is_some()
++            }) {
++                println!(
++                    "lagging-backfill-crash: {}",
++                    json!({"result": "SKIPPED",
++                        "reason": "handoff quiescence could not be proven before the deadline"})
++                );
++                return Ok(());
++            }
++            drained?;
++            let members = SEQUENCER_INDICES
++                .map(|index| Ok(Account::at(index)?.address()))
++                .collect::<eyre::Result<Vec<_>>>()?;
++            let episodes = if quiet { EPISODES } else { 1 };
++            for episode in 0..episodes {
++                if started.elapsed() + EPISODE_RESERVE > BUDGET {
++                    println!("lagging-backfill-crash: budget leaves no room for episode {episode}");
++                    break;
++                }
++                self.lagging_crash_episode(dir, &members, episode, quiet).await?;
++                executed += 1;
++            }
++            Ok(())
++        })
++        .await
++        .wrap_err("Lagging backfill crash episodes finish within the quiet window: timed out")
++        .and_then(|result| result);
++        assert_sometimes!(
++            executed > 0,
++            "Lagging backfill crash: Handoffs drain and a controlled episode executes",
++            &json!({"executed": executed, "quiet": quiet})
++        );
++        if !quiet {
++            return match result {
++                Err(error) if error.chain().any(|cause| cause.is::<Forked>()) => Err(error),
++                Err(error) => {
++                    println!(
++                        "lagging-backfill-crash: {}",
++                        json!({"result": "INCONCLUSIVE", "error": format!("{error:#}")})
++                    );
++                    Ok(())
++                }
++                Ok(()) => Ok(()),
++            };
++        }
++        // A skipped precondition is not a success observation.
++        if executed > 0 || result.is_err() {
++            assert_always!(
++                result.is_ok(),
++                "Lagging backfill crash episodes finish within the quiet window",
++                &json!({"executed": executed,
++                    "error": result.as_ref().err().map(|error| format!("{error:#}"))})
++            );
++        }
++        result
++    }
++
++    async fn lagging_crash_episode(
++        &self,
++        dir: &Path,
++        members: &[Address],
++        episode: usize,
++        quiet: bool,
++    ) -> eyre::Result<()> {
++        let (_, membership) = phase!(
++            quiet,
++            "Preconditions become ready",
++            PRECONDITION_TIMEOUT,
++            self.outage_preconditions(members)
++        )?;
++        let leader = members
++            .iter()
++            .position(|address| *address == membership.leader)
++            .ok_or_eyre("leader is not one of the controlled sequencers")?;
++        let followers: Vec<_> = (0..3).filter(|node| *node != leader).collect();
++        let follower = followers[random_index(followers.len())];
++        let mut heads = Vec::with_capacity(self.zones.len());
++        for zone in &self.zones {
++            let block = zone
++                .get_block_by_number(BlockNumberOrTag::Latest)
++                .await?
++                .ok_or_eyre("no pre-crash zone head")?;
++            heads.push(Head {
++                height: block.header.number,
++                hash: block.header.hash,
++                producer: block.header.beneficiary,
++            });
++        }
++        // Every height from the pre-fault common tip is compared after the crash.
++        let from = heads.iter().map(|head| head.height).min().ok_or_eyre("no zone heads")?;
++        let peak = heads.iter().map(|head| head.height).max().ok_or_eyre("no zone heads")?;
++
++        if random_below(2) == 0 {
++            let successor = follower;
++            let trigger = if random_below(10) < 3 {
++                Trigger::Blind {
++                    delay_ms: random_below(MAX_BLIND_DRAIN_MS + 1),
++                }
++            } else {
++                Trigger::Drain {
++                    delay_ms: random_below(MAX_TRIGGER_DELAY_MS + 1),
++                    leader,
++                    leader_head: heads[leader],
++                    successor: members[successor],
++                    epoch: membership.epoch,
++                }
++            };
++            let fsync_delay_ms = DRAIN_FSYNC_DELAYS_MS[random_index(DRAIN_FSYNC_DELAYS_MS.len())];
++            // Reserve cleanup before either the handoff or its trigger wait.
++            let mut leader_held = Hold::new(self, dir, leader)?;
++            let slow_fsync = SlowFsync::set(dir, leader, fsync_delay_ms)?;
++            let details = json!({"episode": episode, "kind": "drain", "quiet": quiet,
++                "leader": leader, "successor": successor, "epoch": membership.epoch,
++                "fsync_delay_ms": fsync_delay_ms, "trigger": trigger,
++                "heads_before_handoff": heads});
++            println!(
++                "lagging-backfill-crash: {}",
++                json!({"step": "slow_fsync_set", "details": details})
++            );
++            let receipt = phase!(
++                quiet,
++                "Drain handoff transaction is confirmed",
++                PRECONDITION_TIMEOUT,
++                async {
++                    let admin = Account::at(ADMIN_INDEX)?;
++                    let _lease = self
++                        .ledger
++                        .try_lease(&admin)?
++                        .ok_or_eyre("drain handoff admin is busy")?;
++                    let mut request = Request {
++                        id: self.ledger.next_id()?,
++                        previous_leader: membership.leader,
++                        expected_epoch: membership.epoch,
++                        target: members[successor],
++                        relayed: false,
++                        from_l1_block: self.l1.get_block_number().await?,
++                        l1_tx: None,
++                    };
++                    let receipt = self.submit_handoff(&admin, &mut request).await?;
++                    eyre::ensure!(
++                        receipt.status()
++                            && handoff_applied(
++                                receipt.inner.logs(),
++                                self.portal,
++                                receipt.transaction_hash,
++                            ),
++                        "drain handoff did not change leadership"
++                    );
++                    Ok(receipt)
++                }
++            )?;
++            let confirmed_at = Instant::now();
++            println!(
++                "lagging-backfill-crash: {}",
++                json!({"step": "handoff_confirmed", "details": details,
++                    "tx": receipt.transaction_hash, "l1_height": receipt.block_number,
++                    "l1_hash": receipt.block_hash})
++            );
++            phase!(
++                quiet,
++                "Drain kill trigger fires",
++                TRIGGER_WATCH + Duration::from_millis(MAX_TRIGGER_DELAY_MS),
++                await_trigger(self, successor, heads[successor].height, trigger, confirmed_at)
++            )?;
++            let kill_requested_after_ms = confirmed_at.elapsed().as_millis();
++            let (leader_head, successor_head, killed) = tokio::join!(
++                read_head(&self.zones[leader]),
++                read_head(&self.zones[successor]),
++                async {
++                    phase!(
++                        quiet,
++                        "Draining leader is SIGKILLed",
++                        RESTART_TIMEOUT,
++                        leader_held.kill()
++                    )
++                }
++            );
++            println!(
++                "lagging-backfill-crash: {}",
++                json!({"step": "leader_killed", "details": details,
++                    "leader_head": leader_head, "successor_head": successor_head,
++                    "kill_requested_after_ms": kill_requested_after_ms, "killed": killed.is_ok()})
++            );
++            // Reset before restart, and await cleanup even if the kill acknowledgement failed.
++            let cleared = slow_fsync.clear();
++            println!(
++                "lagging-backfill-crash: {}",
++                json!({"step": "slow_fsync_reset", "details": details,
++                    "reset": cleared.is_ok(), "leader_head": leader_head,
++                    "successor_head": successor_head})
++            );
++            let restarted = phase!(
++                quiet,
++                "Drained leader restarts",
++                RESTART_TIMEOUT,
++                leader_held.restore()
++            );
++            killed?;
++            cleared?;
++            restarted?;
++            println!(
++                "lagging-backfill-crash: {}",
++                json!({"step": "leader_restarted", "details": details,
++                    "head": read_head(&self.zones[leader]).await})
++            );
++            let kill_tip = peak
++                .max(leader_head.map_or(0, |head| head.height))
++                .max(successor_head.map_or(0, |head| head.height));
++            let common_tip = self.lagging_crash_convergence(from, kill_tip, quiet).await?;
++            assert_reachable!(
++                "Lagging backfill crash: All zone nodes agree on every common height and advance after a drain crash",
++                &details
++            );
++            println!(
++                "lagging-backfill-crash: {}",
++                json!({"step": "converged", "details": details,
++                    "compared_from": from, "common_tip": common_tip})
++            );
++            return Ok(());
++        }
++
++        let other = followers
++            .into_iter()
++            .find(|node| *node != follower)
++            .ok_or_eyre("no second follower")?;
++        // Lagging the other follower too leaves the leader as the only backfill source; both
++        // are released together before the kill, so both can backfill the same height.
++        let isolate = random_below(3) == 0;
++        let lag = match random_below(3) {
++            0 => Lag::Restart,
++            1 => Lag::Gate,
++            _ => Lag::Probe,
++        };
++        let lag_ms = match lag {
++            Lag::Gate => MIN_GATE_MS + random_below(MAX_GATE_MS - MIN_GATE_MS + 1),
++            Lag::Restart => MIN_HOLD_MS + random_below(MAX_HOLD_MS - MIN_HOLD_MS + 1),
++            Lag::Probe => 0,
++        };
++        let trigger = if matches!(lag, Lag::Probe) || random_below(2) == 0 {
++            Trigger::HeadMoves {
++                delay_ms: random_below(MAX_TRIGGER_DELAY_MS + 1),
++            }
++        } else {
++            Trigger::Blind {
++                delay_ms: random_below(MAX_TRIGGER_DELAY_MS + 1),
++            }
++        };
++        // The probe path needs one commit to stall past the follower's 30 s inactivity probe
++        // (and under the shim's 60 s cap).
++        let fsync_delay_ms = match lag {
++            Lag::Probe => 40_000 + random_below(15_001),
++            _ => FSYNC_DELAYS_MS[random_index(FSYNC_DELAYS_MS.len())],
++        };
++        let slow_fsync = SlowFsync::set(dir, leader, fsync_delay_ms)?;
++        let follower_base = self.zones[follower].get_block_number().await?;
++        println!(
++            "lagging-backfill-crash: {}",
++            json!({"step": "backfill_started", "episode": episode, "kind": "backfill",
++                "leader": leader, "follower": follower, "heads": heads,
++                "fsync_delay_ms": fsync_delay_ms, "lag": lag, "lag_ms": lag_ms, "trigger": trigger})
++        );
++
++        let base = match lag {
++            Lag::Gate => {
++                let mask = (1u8 << follower) | if isolate { 1u8 << other } else { 0 };
++                let lease = Duration::from_millis(lag_ms) + GATE_LEASE_MARGIN;
++                // The guard stays outside the phase future so a phase error still awaits heal.
++                let mut gate = None;
++                let partitioned = phase!(
++                    quiet,
++                    "Followers stay partitioned while the leader keeps producing",
++                    GATE_TIMEOUT,
++                    async {
++                        gate = Some(Fault::apply(dir, 0, mask, lease).await?);
++                        let gate = gate.as_ref().ok_or_eyre("network gate was not installed")?;
++                        gate.while_active(async {
++                            tokio::time::sleep(Duration::from_millis(lag_ms)).await;
++                            Ok(read_tip(&self.zones[follower]).await)
++                        })
++                        .await
++                    }
++                );
++                // Both followers are released together by one heal.
++                let healed = phase!(quiet, "Network gate heals", HEAL_TIMEOUT, async {
++                    match gate.as_mut() {
++                        Some(gate) => gate.heal().await,
++                        // A failed install already cancelled its own lease; without quiet,
++                        // another driver's lease must not be released.
++                        None if quiet => release_network_faults(dir).await,
++                        None => Ok(()),
++                    }
++                });
++                let base = partitioned?;
++                healed?;
++                base.unwrap_or(follower_base).max(follower_base)
++            }
++            Lag::Probe => {
++                // Let broadcasts of already-committed blocks drain, so only the probe moves the head.
++                tokio::time::sleep(Duration::from_secs(3)).await;
++                read_tip(&self.zones[follower])
++                    .await
++                    .unwrap_or(follower_base)
++                    .max(follower_base)
++            }
++            Lag::Restart => {
++                let mut held = Hold::new(self, dir, follower)?;
++                let mut other_held = isolate.then(|| Hold::new(self, dir, other)).transpose()?;
++                let down = phase!(
++                    quiet,
++                    "Followers stay down while the leader keeps producing",
++                    HOLD_TIMEOUT,
++                    async {
++                        held.kill().await?;
++                        if let Some(other_held) = &other_held {
++                            other_held.kill().await?;
++                        }
++                        let sleep = async {
++                            tokio::time::sleep(Duration::from_millis(lag_ms)).await;
++                            Ok(())
++                        };
++                        held.while_down(async {
++                            match &other_held {
++                                Some(other_held) => other_held.while_down(sleep).await,
++                                None => sleep.await,
++                            }
++                        })
++                        .await
++                    }
++                );
++                // Always request and confirm restart before propagating a held-down phase
++                // failure; both followers restart together.
++                let (restored, other_restored) = tokio::join!(
++                    async {
++                        phase!(
++                            quiet,
++                            "Held follower restarts",
++                            RESTART_TIMEOUT,
++                            held.restore()
++                        )
++                    },
++                    async {
++                        match other_held.as_mut() {
++                            Some(other_held) => phase!(
++                                quiet,
++                                "Isolated follower restarts",
++                                RESTART_TIMEOUT,
++                                other_held.restore()
++                            ),
++                            None => Ok(()),
++                        }
++                    }
++                );
++                down?;
++                restored?;
++                other_restored?;
++                follower_base
++            }
++        };
++
++        // Reserved before the trigger wait, so the kill is one control-file write away.
++        let mut leader_held = Hold::new(self, dir, leader)?;
++        await_trigger(self, follower, base, trigger, Instant::now()).await?;
++        let (follower_tip, leader_tip, killed) = tokio::join!(
++            read_tip(&self.zones[follower]),
++            read_tip(&self.zones[leader]),
++            leader_held.kill()
++        );
++        // Restore normal fsync before the restart: a slow commit only matters while the
++        // leader is serving the uncommitted tip, and it would otherwise stall recovery.
++        let cleared = slow_fsync.clear();
++        let crashed = phase!(
++            quiet,
++            "Leader is SIGKILLed and restarts",
++            RESTART_TIMEOUT,
++            async {
++                killed?;
++                leader_held.restore().await
++            }
++        );
++        cleared?;
++        let catching_up = matches!((follower_tip, leader_tip), (Some(f), Some(l)) if f < l);
++        let moving = follower_tip.is_some_and(|tip| tip > base);
++        let details = json!({
++            "episode": episode,
++            "kind": "backfill",
++            "quiet": quiet,
++            "leader": leader,
++            "follower": follower,
++            "isolated_other_follower": isolate,
++            "lag": lag,
++            "lag_ms": lag_ms,
++            "trigger": trigger,
++            "fsync_delay_ms": fsync_delay_ms,
++            "follower_base": base,
++            "follower_tip_at_kill": follower_tip,
++            "leader_tip_at_kill": leader_tip,
++        });
++        assert_sometimes!(
++            crashed.is_ok() && catching_up,
++            "Lagging backfill crash: Leader kill lands while the lagging follower is still catching up",
++            &details
++        );
++        assert_sometimes!(
++            crashed.is_ok() && catching_up && moving,
++            "Lagging backfill crash: Leader kill lands while the lagging follower's head is moving",
++            &details
++        );
++        crashed?;
++
++        // An unreadable leader tip falls back to the highest tip seen before the lag.
++        let kill_tip = leader_tip.unwrap_or(peak).max(follower_tip.unwrap_or(0));
++        let common_tip = self.lagging_crash_convergence(from, kill_tip, quiet).await?;
++        assert_reachable!(
++            "Lagging backfill crash: All zone nodes agree on every common height after a leader crash during follower catch-up",
++            &details
++        );
++        println!(
++            "lagging-backfill-crash: {}",
++            json!({"details": details, "catching_up": catching_up, "moving": moving,
++                "compared_from": from, "common_tip": common_tip})
++        );
++        Ok(())
++    }
++
++    async fn lagging_crash_convergence(
++        &self,
++        from: u64,
++        kill_tip: u64,
++        quiet: bool,
++    ) -> eyre::Result<u64> {
++        phase!(
++            quiet,
++            "Zone nodes converge on identical blocks after the leader crash",
++            CONVERGENCE_TIMEOUT,
++            recover_until(Instant::now() + CONVERGENCE_TIMEOUT, async || {
++                let observed = self
++                    .observe_forks(Some(from), "lagging-backfill-crash")
++                    .await;
++                if !observed.divergent.is_empty() {
++                    return Err(eyre::Report::new(Forked)
++                        .wrap_err(format!("divergent heights: {:?}", observed.divergent)));
++                }
++                let common_tip = observed
++                    .common_tip
++                    .filter(|tip| observed.unreachable.is_empty() && *tip > kill_tip);
++                if let Some(tip) = common_tip {
++                    let mut hashes = Vec::with_capacity(self.zones.len());
++                    for zone in &self.zones {
++                        let Some(block) = zone.get_block_by_number(tip.into()).await? else {
++                            return Ok(None);
++                        };
++                        hashes.push(block.header.hash);
++                    }
++                    if hashes.iter().any(|hash| *hash != hashes[0]) {
++                        return Ok(None);
++                    }
++                    println!(
++                        "lagging-backfill-crash: {}",
++                        json!({"step": "common_hashes", "height": tip,
++                            "hashes": hashes, "compared_from": from})
++                    );
++                }
++                Ok(common_tip)
++            })
++        )
++    }
++}
++
++/// Waits until `trigger` fires. A backfill watch fires anyway after [`TRIGGER_WATCH`]; a drain
++/// watch must observe a transition within that bound. Blind delays start at `released_at`.
++async fn await_trigger(
++    ctx: &Context,
++    follower: usize,
++    base: u64,
++    trigger: Trigger,
++    released_at: Instant,
++) -> eyre::Result<()> {
++    match trigger {
++        Trigger::HeadMoves { delay_ms } => {
++            let deadline = Instant::now() + TRIGGER_WATCH;
++            while Instant::now() < deadline {
++                if read_tip(&ctx.zones[follower]).await.is_some_and(|tip| tip > base) {
++                    break;
++                }
++                tokio::time::sleep(TRIGGER_POLL).await;
++            }
++            tokio::time::sleep(Duration::from_millis(delay_ms)).await;
++        }
++        Trigger::Blind { delay_ms } => {
++            tokio::time::sleep_until(released_at + Duration::from_millis(delay_ms)).await;
++        }
++        Trigger::Drain {
++            delay_ms,
++            leader,
++            leader_head,
++            successor,
++            epoch,
++        } => {
++            let mut last_leader = leader_head;
++            let mut changed_at = Instant::now();
++            let mut poll = tokio::time::interval(TRIGGER_POLL);
++            poll.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
++            timeout(TRIGGER_WATCH, async {
++                loop {
++                    poll.tick().await;
++                    let (leader_head, successor_head, current) = tokio::join!(
++                        read_head(&ctx.zones[leader]),
++                        read_head(&ctx.zones[follower]),
++                        timeout(TIP_READ_TIMEOUT, ctx.outage_membership(BlockId::latest()))
++                    );
++                    let current_epoch = match current {
++                        Ok(Ok(current)) => Some(current.epoch),
++                        Ok(Err(error)) => {
++                            println!("lagging-backfill-crash: drain epoch unavailable: {error:#}");
++                            None
++                        }
++                        Err(_) => None,
++                    };
++                    let now = Instant::now();
++                    if let Some(head) = leader_head {
++                        if head != last_leader {
++                            last_leader = head;
++                            changed_at = now;
++                        }
++                    } else {
++                        // An unreachable head cannot prove that production stopped.
++                        changed_at = now;
++                    }
++                    let reason = if successor_head
++                        .is_some_and(|head| head.height > base && head.producer == successor)
++                    {
++                        Some("successor_produced")
++                    } else if current_epoch.is_some_and(|current| current != epoch) {
++                        Some("portal_epoch_changed")
++                    } else if leader_head.is_some()
++                        && now.duration_since(changed_at) >= DRAIN_STALL
++                    {
++                        Some("leader_head_stopped")
++                    } else {
++                        None
++                    };
++                    if let Some(reason) = reason {
++                        println!(
++                            "lagging-backfill-crash: {}",
++                            json!({"step": "drain_observed", "reason": reason,
++                                "epoch": current_epoch, "leader": leader, "successor": follower,
++                                "leader_head": leader_head, "successor_head": successor_head})
++                        );
++                        break;
++                    }
++                }
++            })
++            .await
++            .wrap_err("leader drain was not observed before the trigger deadline")?;
++            tokio::time::sleep(Duration::from_millis(delay_ms)).await;
++        }
++    }
++    Ok(())
++}
++
++/// Reads a node's tip, or `None` if it does not answer within [`TIP_READ_TIMEOUT`].
++async fn read_tip(zone: &DynProvider) -> Option<u64> {
++    timeout(TIP_READ_TIMEOUT, zone.get_block_number())
++        .await
++        .ok()
++        .and_then(Result::ok)
++}
++
++/// Reads a head with its hash and producer without delaying the kill on an unresponsive node.
++async fn read_head(zone: &DynProvider) -> Option<Head> {
++    match timeout(
++        TIP_READ_TIMEOUT,
++        zone.get_block_by_number(BlockNumberOrTag::Latest),
++    )
++    .await
++    {
++        Ok(Ok(Some(block))) => Some(Head {
++            height: block.header.number,
++            hash: block.header.hash,
++            producer: block.header.beneficiary,
++        }),
++        Ok(Ok(None)) | Err(_) => None,
++        Ok(Err(error)) => {
++            println!("lagging-backfill-crash: head unavailable: {error}");
++            None
++        }
++    }
++}
++
++/// A published leader fsync delay; dropping it restores normal fsync.
++struct SlowFsync {
++    dir: PathBuf,
++    node: usize,
++    armed: bool,
++}
++
++impl SlowFsync {
++    fn set(dir: &Path, node: usize, delay_ms: u64) -> eyre::Result<Self> {
++        write_fsync_delay(dir, node, delay_ms)?;
++        Ok(Self {
++            dir: dir.to_path_buf(),
++            node,
++            armed: true,
++        })
++    }
++
++    fn clear(mut self) -> eyre::Result<()> {
++        write_fsync_delay(&self.dir, self.node, 0)?;
++        self.armed = false;
++        Ok(())
++    }
++}
++
++impl Drop for SlowFsync {
++    fn drop(&mut self) {
++        if self.armed
++            && let Err(error) = write_fsync_delay(&self.dir, self.node, 0)
++        {
++            eprintln!("slow-fsync reset failed: {error:#}");
++        }
++    }
++}
++
++/// Restores normal fsync on every controlled sequencer, after an interrupted episode.
++pub(super) fn release_slow_fsync(dir: &Path) -> eyre::Result<()> {
++    for node in 0..3 {
++        write_fsync_delay(dir, node, 0)?;
++    }
++    Ok(())
++}
++
++/// Atomically publishes `/fault-control/fsync-<node>`, which the node's slow-fsync shim reads.
++fn write_fsync_delay(dir: &Path, node: usize, delay_ms: u64) -> eyre::Result<()> {
++    let name = format!("fsync-{node}");
++    let temporary = dir.join(format!(".{name}.{}.tmp", std::process::id()));
++    fs::write(&temporary, delay_ms.to_string()).wrap_err("failed writing slow-fsync control")?;
++    fs::rename(&temporary, dir.join(&name)).wrap_err("failed publishing slow-fsync control")
++}
++
++#[cfg(test)]
++mod tests {
++    use super::*;
++    use crate::ledger::Ledger;
++    use alloy::{
++        primitives::{Bytes, U256},
++        providers::ProviderBuilder,
++        rpc::types::Block,
++        sol_types::SolValue as _,
++        transports::{http::reqwest, mock::Asserter},
++    };
++
++    fn trigger_context(l1: Asserter, zones: &[Asserter; 2]) -> (tempfile::TempDir, Context) {
++        let dir = tempfile::tempdir().unwrap();
++        let url = "http://localhost:8545".parse::<reqwest::Url>().unwrap();
++        let ctx = Context {
++            ledger: Ledger::open(dir.path()).unwrap(),
++            http: reqwest::Client::new(),
++            l1_url: url.clone(),
++            l1: ProviderBuilder::new().connect_mocked_client(l1).erased(),
++            zone_urls: vec![url.clone(), url],
++            zones: zones
++                .iter()
++                .map(|zone| ProviderBuilder::new().connect_mocked_client(zone.clone()).erased())
++                .collect(),
++            portal: Address::repeat_byte(9),
++        };
++        (dir, ctx)
++    }
++
++    fn queue_head(zone: &Asserter, height: u64, producer: Address) {
++        let mut block = Block::<B256>::default();
++        block.header.number = height;
++        block.header.hash = B256::from(U256::from(height));
++        block.header.beneficiary = producer;
++        zone.push_success(&block);
++    }
++
++    #[tokio::test(start_paused = true)]
++    async fn blind_trigger_uses_confirmation_time_without_reading_rpc() {
++        for delay_ms in [0, MAX_BLIND_DRAIN_MS] {
++            let zones = [Asserter::new(), Asserter::new()];
++            let (_dir, ctx) = trigger_context(Asserter::new(), &zones);
++            let confirmed_at = Instant::now();
++            tokio::time::advance(TRIGGER_POLL).await;
++            let started = Instant::now();
++            await_trigger(&ctx, 1, 10, Trigger::Blind { delay_ms }, confirmed_at)
++                .await
++                .unwrap();
++            assert_eq!(
++                Instant::now(),
++                (confirmed_at + Duration::from_millis(delay_ms)).max(started)
++            );
++        }
++    }
++
++    #[tokio::test(start_paused = true)]
++    async fn drain_requires_an_advancing_head_produced_by_the_successor() {
++        let l1 = Asserter::new();
++        let zones = [Asserter::new(), Asserter::new()];
++        let leader = Address::repeat_byte(1);
++        let successor = Address::repeat_byte(2);
++        for (height, producer) in [(10, successor), (11, leader), (11, successor)] {
++            queue_head(&zones[0], 10, leader);
++            queue_head(&zones[1], height, producer);
++            l1.push_failure_msg("L1 unavailable; successor production must suffice");
++        }
++        let (_dir, ctx) = trigger_context(l1, &zones);
++        let started = Instant::now();
++        let delay_ms = 75;
++        await_trigger(
++            &ctx,
++            1,
++            10,
++            Trigger::Drain {
++                delay_ms,
++                leader: 0,
++                leader_head: Head {
++                    height: 10,
++                    hash: B256::from(U256::from(10)),
++                    producer: leader,
++                },
++                successor,
++                epoch: 7,
++            },
++            started,
++        )
++        .await
++        .unwrap();
++        assert_eq!(started.elapsed(), TRIGGER_POLL * 2 + Duration::from_millis(delay_ms));
++    }
++
++    #[tokio::test(start_paused = true)]
++    async fn drain_observes_a_portal_epoch_change_without_successor_progress() {
++        let l1 = Asserter::new();
++        let zones = [Asserter::new(), Asserter::new()];
++        let leader = Address::repeat_byte(1);
++        let successor = Address::repeat_byte(2);
++        queue_head(&zones[0], 10, leader);
++        queue_head(&zones[1], 10, leader);
++        let mut block = Block::<B256>::default();
++        block.header.number = 100;
++        block.header.hash = B256::from(U256::from(100));
++        l1.push_success(&block);
++        l1.push_success(&Bytes::from(U256::from(2).abi_encode()));
++        l1.push_success(&Bytes::from(
++            (
++                U256::from(10),
++                vec![Bytes::from(leader.abi_encode()), Bytes::from(successor.abi_encode())],
++            )
++                .abi_encode_params(),
++        ));
++        for value in [2, 1] {
++            l1.push_success(&Bytes::from(U256::from(value).abi_encode()));
++        }
++        l1.push_success(&Bytes::from(successor.abi_encode()));
++        l1.push_success(&Bytes::from(U256::from(8).abi_encode()));
++        let (_dir, ctx) = trigger_context(l1, &zones);
++        let started = Instant::now();
++        await_trigger(
++            &ctx,
++            1,
++            10,
++            Trigger::Drain {
++                delay_ms: 75,
++                leader: 0,
++                leader_head: Head {
++                    height: 10,
++                    hash: B256::from(U256::from(10)),
++                    producer: leader,
++                },
++                successor,
++                epoch: 7,
++            },
++            started,
++        )
++        .await
++        .unwrap();
++        assert_eq!(started.elapsed(), Duration::from_millis(75));
++    }
++
++    #[tokio::test(start_paused = true)]
++    async fn drain_distinguishes_a_stopped_head_from_an_unreachable_head() {
++        for unreachable in [false, true] {
++            let l1 = Asserter::new();
++            let zones = [Asserter::new(), Asserter::new()];
++            let leader = Address::repeat_byte(1);
++            for _ in 0..=TRIGGER_WATCH.as_millis() / TRIGGER_POLL.as_millis() {
++                if unreachable {
++                    zones[0].push_success(&Option::<Block<B256>>::None);
++                } else {
++                    queue_head(&zones[0], 10, leader);
++                }
++                queue_head(&zones[1], 10, leader);
++                l1.push_failure_msg("L1 unavailable; only a stopped reachable head may trigger");
++            }
++            let (_dir, ctx) = trigger_context(l1, &zones);
++            let started = Instant::now();
++            let result = await_trigger(
++                &ctx,
++                1,
++                10,
++                Trigger::Drain {
++                    delay_ms: 75,
++                    leader: 0,
++                    leader_head: Head {
++                        height: 10,
++                        hash: B256::from(U256::from(10)),
++                        producer: leader,
++                    },
++                    successor: Address::repeat_byte(2),
++                    epoch: 7,
++                },
++                started,
++            )
++            .await;
++            if unreachable {
++                let error = result.unwrap_err();
++                assert_eq!(
++                    error.to_string(),
++                    "leader drain was not observed before the trigger deadline"
++                );
++                assert!(error.downcast_ref::<tokio::time::error::Elapsed>().is_some());
++                assert_eq!(started.elapsed(), TRIGGER_WATCH);
++            } else {
++                result.unwrap();
++                assert_eq!(started.elapsed(), DRAIN_STALL + Duration::from_millis(75));
++            }
++        }
++    }
++}

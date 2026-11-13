@@ -1,0 +1,78 @@
+ Network n2repro_zones  Creating
+ Network n2repro_zones  Created
+ Volume n2repro_zone-0-data  Creating
+ Volume n2repro_zone-0-data  Created
+ Volume n2repro_fault-control  Creating
+ Volume n2repro_fault-control  Created
+ Volume n2repro_zone-2-data  Creating
+ Volume n2repro_zone-2-data  Created
+ Volume n2repro_l1-data  Creating
+ Volume n2repro_l1-data  Created
+ Volume n2repro_zone-rpc-data  Creating
+ Volume n2repro_zone-rpc-data  Created
+ Volume n2repro_zone-1-data  Creating
+ Volume n2repro_zone-1-data  Created
+ Volume n2repro_shared  Creating
+ Volume n2repro_shared  Created
+ Container proxy-1  Creating
+ Container proxy-2  Creating
+ Container l1  Creating
+ Container proxy-0  Creating
+ Container l1  Created
+ Container provision  Creating
+ Container proxy-0  Created
+ Container proxy-2  Created
+ Container proxy-1  Created
+ Container provision  Created
+ Container zone-2  Creating
+ Container zone-1  Creating
+ Container zone-rpc  Creating
+ Container zone-0  Creating
+ Container zone-2  Created
+ Container zone-0  Created
+ Container zone-1  Created
+ Container zone-rpc  Created
+ Container l1  Starting
+ Container proxy-1  Starting
+ Container proxy-2  Starting
+ Container proxy-0  Starting
+ Container proxy-2  Started
+ Container l1  Started
+ Container provision  Starting
+ Container proxy-1  Started
+ Container proxy-0  Started
+ Container provision  Started
+ Container provision  Waiting
+ Container provision  Waiting
+ Container provision  Waiting
+ Container provision  Waiting
+ Container provision  Exited
+ Container zone-0  Starting
+ Container provision  Exited
+ Container zone-1  Starting
+ Container provision  Exited
+ Container zone-2  Starting
+ Container provision  Exited
+ Container zone-rpc  Starting
+ Container zone-rpc  Started
+ Container zone-2  Started
+ Container zone-0  Started
+ Container zone-1  Started
+[20:08:39] waiting for zone-1 to reach height 30
+[20:08:55] tips: z0=32 z1=32 z2=32
+[20:08:56] leader zone-0 pid=10 tips: z0=33 z1=33 z2=33
+[20:09:08] HELD: Thread 68 "mdbx-rs-txn-mgr" hit Breakpoint 1, mdbx_txn_commit_ex (
+#22 0x0000557b9c1a7c41 in reth_provider::providers::database::provider::{impl#54}::commit<reth_db::implementation::mdbx::tx::Tx<reth_libmdbx::transaction::RW>, reth_node_types::NodeTypesWithDBAdapter<
+#23 0x0000557b9c6932c8 in reth_engine_tree::persistence::PersistenceService<reth_node_types::NodeTypesWithDBAdapter<zone_node::node::ZoneNode, reth_db::implementation::mdbx::DatabaseEnv>>::on_save_blo
+[20:09:24] follower tips at hold: z1=38 z2=38 (leader rpc tip=54)
+[20:09:37] zone-1 got height 39 hash 0xc16d3a4eb8042669d0a12d81e853779492843ab86c33a4860bd55540c31dd58f while leader commit still held
+[20:09:38] SIGKILLed leader (supervisor kill)
+[20:09:40] restarted leader
+AccountsHistory: healing via changesets checkpoint=38 sf_tip=39
+[20:09:53] zone-0 tip=64 hash@39=0xa9ae805a3c2783e79c3ac669d18142fd2fa1308cd07c06a5e470e26636827674
+[20:09:53] zone-1 tip=39 hash@39=0xc16d3a4eb8042669d0a12d81e853779492843ab86c33a4860bd55540c31dd58f
+[20:09:53] zone-2 tip=39 hash@39=0xc16d3a4eb8042669d0a12d81e853779492843ab86c33a4860bd55540c31dd58f
+[20:09:54] zone-rpc tip=39 hash@39=0xc16d3a4eb8042669d0a12d81e853779492843ab86c33a4860bd55540c31dd58f
+2026-11-13T20:09:42.352428Z ERROR zone::p2p: Rejected duplicate or conflicting peer block err=peer block conflicts with canonical block at height 39: local=0xc16d3a4eb8042669d0a12d81e853779492843ab86c33a4860bd55540c31dd58f, received=0xa9ae805a3c2783e79c3ac669d18142fd2fa1308cd07c06a5e470e26636827674
+2026-11-13T20:09:42.472213Z ERROR zone::p2p: Rejected peer block while importing pending blocks err=peer block parent mismatch at height 40: local=0xc16d3a4eb8042669d0a12d81e853779492843ab86c33a4860bd55540c31dd58f, received=0xa9ae805a3c2783e79c3ac669d18142fd2fa1308cd07c06a5e470e26636827674
+[20:09:54] *** PERMANENT FORK at 39 ***

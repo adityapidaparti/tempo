@@ -1,0 +1,153 @@
+# Zone leader serves blocks that are not yet durable: crash permanently forks the leader from its quorum
+
+**Severity: critical by our assessment, high by an independent Codex review (see the end).** One process crash of the zone leader, landing in an ordinary window of its commit path, permanently forks the leader from every other node:
+
+- Followers stop accepting blocks.
+- L1 settlement stops.
+- Transactions the leader acknowledges with receipts after the fork are invalidated.
+- The standard leader handoff (`setLeader`) cannot recover it.
+
+Recovery takes operator repair: a manifest forced recovery, or rebuilding nodes from one surviving replica, plus wiping the replicas on the other branch.
+
+- Commit tested: `tempoxyz/tempo@8314f7ba` (Alexey's quorum-handoff configuration). The product code is unmodified.
+- Found by Antithesis: run `1b900239d3de50bcf4a2b9e2cbc8ed1a-67-0`, property *"Zone nodes never hold different blocks at the same height"*.
+- Deterministic local reproduction: `repro-leader-persistence-fork/n2-gdb-hold.sh` (gdb only, no test shims).
+
+## The bug
+
+`crates/zones/node/src/replication.rs` decides how far the leader's chain extends by calling reth's `provider.last_block_number()`. Five paths depend on that call:
+
+| Path | Location | Effect |
+|---|---|---|
+| `serve_backfill_page` | `replication.rs:399` | Bounds catch-up pages served to followers |
+| Drain at demotion | `replication.rs:255` | Live-broadcasts the tail, without a hash check |
+| Broadcaster startup | `replication.rs:122,130` | Initial broadcast range |
+| Stop flush | `replication.rs:176` | Flushes through the tip |
+| `BatchPreparer` | `sequencer/src/monitor.rs:424` | Settlement proposals |
+
+`last_block_number()` returns the **static-file** header tip. reth advances that tip inside `DatabaseProvider::commit` **before** the MDBX transaction commits:
+
+```
+// reth crates/storage/provider/src/providers/database/provider.rs:4083-4108 (pinned rev 31d05e14)
+self.static_file_provider.finalize()?;      // last_block_number() now = H
+for batch in batches { self.rocksdb_provider.commit_batch(batch)?; }
+self.tx.commit()?;                           // MDBX durable only here
+```
+
+While the leader is between `finalize()` and `tx.commit()`, it serves block H to followers. The block body comes from reth's in-memory canonical state, so serving succeeds. If the leader process dies before `tx.commit()` returns, reth's startup `check_consistency` prunes H. The log line is `healing via changesets checkpoint=H-1 sf_tip=H`.
+
+After restart the leader is still the scheduled author for the next anchor. It builds a new block H′ at the same height. H′ differs from H because its timestamp is `max(l1, wall clock, parent)` (`engine.rs:673`) and its pool and L1 inputs differ. The leader then broadcasts H′ as the legitimate sender.
+
+The normal steady-state broadcast is safe, because it is driven by reth's *persisted* block stream (`replication.rs:203`). The paths that read `last_block_number()` bypass that durability boundary.
+
+### Why the followers never recover
+
+- A follower holding H rejects H′ (`follower.rs:~592`, "peer block conflicts with canonical block") and every child of H′ ("parent mismatch", `follower.rs:~610`).
+- No reorg or unwind path exists in the follower, engine or role code.
+- The only reaction is to set `backfill.needed`, which re-fetches the same conflicting blocks.
+- The leader ignores incoming blocks (`replication.rs:527-532`) and promotes itself with no peer-chain evidence (`role.rs:582`).
+
+## Reproduction
+
+### Antithesis
+Run `1b900239d3de50bcf4a2b9e2cbc8ed1a-67-0`, turbo, 3 h, `custom_faults`, with kill, throttle, hang, network, clock and CPU faults on the zone sequencers.
+
+The counterexample is `input_hash -5758899608147099785`, at vtime 189.85.
+
+| vtime | Event |
+|---|---|
+| 105.6 | Leader zone-1's commit of block 166 is slow. The test-only shim delays `msync` on `mdbx.dat`, modelling a slow disk; it changes no data or ordering. The driver gates zone-2's P2P. |
+| 107.7 | `zone-rpc` backfills 166 = `0x7383…` from the leader. |
+| 141.3 | The gate heals. zone-0 and zone-2 backfill the same 166 = `0x7383…`. |
+| ~141.9 | zone-1 (leader) is SIGKILLed. |
+| 187.4 | On restart zone-1 logs `healing via changesets checkpoint=165 sf_tip=166`, then `Leader generation started epoch=2`. It rebuilds 166 = `0x3bde…`. |
+| 189.85 | The always-assertion fails. Leader zone-1 holds `0x3bde…`; zone-0, zone-2 and zone-rpc hold `0x7383…`. |
+
+### Local, deterministic, no shim (`repro-leader-persistence-fork/n2-gdb-hold.sh`)
+1. gdb, in non-stop mode, attaches to the leader's `tempo-zone node`.
+2. A breakpoint on `mdbx_txn_commit_ex` stops only the `mdbx-rs-txn-mgr` thread. The backtrace shows `DatabaseProvider::commit` → `PersistenceService::on_save_blocks`, so `finalize()` has already run.
+3. The followers' 30 s inactivity probe ("No peer block received recently; probing for backfill") backfills the uncommitted block 39 from the leader.
+4. SIGKILL the leader and restart it. It logs `healing via changesets checkpoint=38 sf_tip=39` and rebuilds 39.
+5. Result:
+
+| Node | Hash at 39 | Tip |
+|---|---|---|
+| zone-0 (leader) | `0xa9ae805a…827674` | 154 and rising |
+| zone-1 | `0xc16d3a4e…dd58f` | 39, stuck |
+| zone-2 | `0xc16d3a4e…dd58f` | 39, stuck |
+| zone-rpc | `0xc16d3a4e…dd58f` | 39, stuck |
+
+The followers log `peer block parent mismatch at height 40` forever.
+
+### Impact demonstration on unmodified product code (`repro-leader-persistence-fork/n2-impact.sh`)
+- Image built from `8314f7ba` with no changes under `crates/`. The binary contains none of the hunt's test assertions.
+- Leader zone-0 was forked with the gdb hold above. On restart it logged `healing via changesets checkpoint=153 sf_tip=156`. It had lost blocks 154–156, which the followers had already backfilled, and rebuilt all three differently:
+  - 154: followers hold `0x98b6…`; the leader rebuilt `0x1e9e…`.
+  - 155: followers hold `0x7ecb…`; the leader rebuilt `0xdc64…`.
+  - 156: followers hold `0x24f3…`; the leader rebuilt `0xddab…`.
+- After the fork, a pathUSD transfer was sent to the leader's RPC. It returned **`status 1 (success)` in block 187**, tx `0x6b805b7d…c39f`.
+
+About 10 minutes later:
+
+| Node | Tip | `eth_getTransactionReceipt(0x6b805b7d…)` |
+|---|---|---|
+| zone-0 (leader) | 1198 and rising | success, block 187 |
+| zone-1 | **156** (frozen) | `null` |
+| zone-2 | **156** (frozen) | `null` |
+| zone-rpc (user RPC) | **156** (frozen) | `null` |
+
+**L1 settlement:** the leader had submitted 15 batches before the fork and 0 after. Over the same period zone-1 logged 1,044 `Rejected settlement proposal … does not match` warnings, 68 `Rejected settlement proposal at height … not durable` warnings, and 493 `peer block parent mismatch` errors.
+
+## Impact
+
+- **Availability:** the zone halts indefinitely.
+  - Every follower, including the user-facing RPC node, freezes at H.
+  - Settlement stops: followers refuse to sign proposals above their persisted head or mismatching their chain (`follower.rs:421-441`). The leader loops for a second signature forever (`settlement_manager.rs:97-136`), with threshold 2 of 3.
+  - New withdrawals cannot be finalized on L1. Already-settled withdrawals can still be processed.
+  - The leader's own RPC looks healthy, which masks the outage.
+- **Invalidated receipts:**
+  - Transactions the leader includes after the fork get success receipts from the leader, on a branch that can never settle. Those receipts become invalid when the branch is discarded in recovery; the demonstration above shows one.
+  - Follower-origin transactions are forwarded to every quorum peer and retained, so some can be re-executed on the surviving branch. Results may differ.
+  - Users of the RPC node never see receipts for anything after the fork.
+  - Deposits are credited only on the leader's branch until recovery replays them.
+- **Recovery is manual and the normal tool makes it worse:**
+  - An L1 `setLeader` handoff to a follower deadlocks the zone. The follower can promote only when its next anchor reaches activation, but the intervening anchors belong to the old leader and exist only on the fork (`role.rs:617-619`, `786-795`).
+  - Recovery needs an operator: either a manifest forced recovery (`p2p/src/manifest.rs:92-160`) naming a follower and hash H, plus stopping and wiping the old leader, or rebuilding nodes from one surviving replica.
+- **Worse variant (code-confirmed, not yet run):**
+  1. The leader proposes a batch ending at H while H is only in static files (`monitor.rs:424`).
+  2. Followers that already backfilled H sign it (`follower.rs:420-427`).
+  3. L1 accepts it.
+  4. The leader crashes.
+
+  After restart `resolve_portal_zone_anchor` fails ("portal block hash … is not canonical", `settlement.rs:186`). The leader generation never starts and the node stays fenced forever (`role.rs:700-719`).
+
+### How likely without a slow disk
+- With `persistence_threshold = 0` (`cli.rs:209`), every block passes through the window.
+- With a fast disk the window is the RocksDB plus MDBX commit time, milliseconds per block. Any disk stall (cloud volumes, noisy neighbours, fsync spikes) widens it.
+- A follower only needs to be in backfill mode at that moment: just restarted, just healed from a partition, or 30 s without blocks.
+
+## Fix
+- Never publish beyond the durable tip.
+  - Bound backfill pages, Drain, startup and Stop by the last block from the persisted-block notification stream (the MDBX-committed tip), or by the Finish stage checkpoint. Do not use `last_block_number()`.
+  - Apply the same bound to `BatchPreparer` and the follower's settlement durability guard.
+- Defence in depth: let a restarted leader that is behind a quorum of followers backfill from them before producing, instead of re-authoring heights it once published.
+
+## Independent evaluation (Codex `gpt-6-astra`, xhigh reasoning)
+
+The evaluation was given only this write-up and the code, and checked every claim.
+
+- **Verdict: the core bug is valid. Severity: high.**
+- **Confirmed against code:**
+  - All six `last_block_number()` calls.
+  - reth's static-file-before-MDBX ordering, and the fact that serving succeeds from canonical memory.
+  - Pruning on restart.
+  - No reconciliation path: followers never rewind, the leader discards peer blocks, and promotion needs no peer-chain evidence.
+  - `setLeader` cannot bridge the missing anchors.
+  - The settlement variant fences the leader indefinitely.
+- **Corrections, applied above:**
+  - Receipts are invalidated, not every transaction is lost, because forwarded transactions can survive.
+  - Only new withdrawals are blocked.
+  - Forced recovery is not the only repair.
+  - The outage needs enough signers stranded to deny quorum. In 2-of-3 that means both followers, which happened in every reproduction, because the backfill probe reaches both.
+- **Strongest counter-argument:** normal broadcast respects durability, and the outage needs publication inside the commit window.
+- **Its conclusion:** "one correctly timed crash can cause an indefinite zone-wide outage requiring operator repair."

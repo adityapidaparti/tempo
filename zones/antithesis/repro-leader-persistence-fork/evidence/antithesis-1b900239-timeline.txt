@@ -1,0 +1,13 @@
+23.961330456193537 zone-0 2026-11-13T20:56:56.032729Z  INFO zone::role: Leader generation started generation=1 epoch=1
+105.15294916648418 zone-1 2026-11-13T20:58:17.224350Z  INFO zone::role: Leader generation started generation=2 epoch=2
+105.16026363382116 zone-2 2026-11-13T20:58:17.231664Z  INFO zone::p2p: Imported canonical peer block block_number=165 hash=0x2ba0bba8527485feee839f6b61480a610000e3dc76240acf576b9cf1a677a574
+105.16137252608314 zone-rpc 2026-11-13T20:58:17.232773Z  INFO zone::p2p: Imported canonical peer block block_number=165 hash=0x2ba0bba8527485feee839f6b61480a610000e3dc76240acf576b9cf1a677a574
+105.16248561628163 zone-0 2026-11-13T20:58:17.233886Z  INFO zone::p2p: Imported canonical peer block block_number=165 hash=0x2ba0bba8527485feee839f6b61480a610000e3dc76240acf576b9cf1a677a574
+105.63341502286494 workload lagging-backfill-crash: {"episode":0,"follower":2,"fsync_delay_ms":45000,"heads":[{"hash":"0x2ba0bba8527485feee839f6b61480a610000e3dc76240acf576b9cf1a677a574","height":165,"producer":"0x976ea74026e726554db657fa54763abd0c3a0aa9"},{"hash":"0x2ba0bba8527485feee839f6b61480a610000e3dc76240acf576b9cf1a677a574","height":165,"producer":"0x976ea74026e726554db657fa54763abd0c3a0aa9"},{"hash":"0x2ba0bba852748
+107.65377082768828 zone-rpc 2026-11-13T20:58:19.725172Z  INFO zone::p2p: Imported canonical peer block block_number=166 hash=0x738355a6a610ad7fd14255306199ebe107d6aa93688fa80d5b4ed67a69af909a
+141.3210593124386 zone-0 2026-11-13T20:58:53.392460Z  INFO zone::p2p: Imported canonical peer block block_number=166 hash=0x738355a6a610ad7fd14255306199ebe107d6aa93688fa80d5b4ed67a69af909a
+141.32165230601095 zone-2 2026-11-13T20:58:53.393053Z  INFO zone::p2p: Imported canonical peer block block_number=166 hash=0x738355a6a610ad7fd14255306199ebe107d6aa93688fa80d5b4ed67a69af909a
+187.45413063513115 zone-1 2026-11-13T20:59:39.525531Z  INFO check_consistency: reth::providers::rocksdb: StoragesHistory: healing via changesets checkpoint=165 sf_tip=166 total_blocks=1
+187.45465287729166 zone-1 2026-11-13T20:59:39.526054Z  INFO check_consistency: reth::providers::rocksdb: AccountsHistory: healing via changesets checkpoint=165 sf_tip=166 total_blocks=1
+187.46342744748108 zone-1 2026-11-13T20:59:39.534828Z  INFO zone::role: Leader generation started generation=1 epoch=2
+189.85133671713993 workload lagging-backfill-crash: {"error":"divergent heights: {166: {\"http://10.20.0.11:8545/\": 0x738355a6a610ad7fd14255306199ebe107d6aa93688fa80d5b4ed67a69af909a, \"http://10.20.0.12:8545/\": 0x3bdee193bb4fb7ee6087d44f07c5b28875c2baf1493ceca026ee666b841eb1a6, \"http://10.20.0.13:8545/\": 0x738355a6a610ad7fd14255306199ebe107d6aa93688fa80d5b4ed67a69af909a, \"http://10.20.0.20:8545/\": 0x738355a6a610ad7fd1
