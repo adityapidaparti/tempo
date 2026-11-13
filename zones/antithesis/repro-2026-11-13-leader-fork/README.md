@@ -1,4 +1,4 @@
-# Reproducing bug 4 (leader serves blocks before they are durable)
+# Reproducing 2026-11-13 bug 1 (leader serves blocks before they are durable)
 
 The scripts drive the zones Docker harness from Alexey's quorum-handoff configuration
 (`tempoxyz/tempo@8314f7ba`, `contrib/antithesis/zones`). Paths inside the scripts point at the
