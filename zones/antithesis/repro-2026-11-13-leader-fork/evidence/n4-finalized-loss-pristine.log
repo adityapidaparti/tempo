@@ -1,0 +1,20 @@
+seed: funded 8 zone accounts
+[22:36:00] image tempo-zones-antithesis:pristine; leader zone-0
+[22:36:01] sender 0x53693DC8D7B67FA2dB8f21F46C2Cd55c6fEAD0f7 balance on zone-1 before: 1000000000 [1e9]
+[22:36:14] leader's MDBX commit is paused (durability frozen); followers at 157
+blockNumber          164
+status               1 (success)
+transactionHash      0x89f7fbd4d269b897601c10959c4ebba2caa57833d9bcea57c4208ff553235b4d
+[22:36:20] leader reports finalized block = 170 (tx block 164); receipt on leader: {"type":"0x2","status":"0x1","cumulativeGasUsed":"0x5dbe0","logs":[{"address":"0x20c000000
+[22:36:20] SIGKILL leader
+[22:36:22] restarted leader
+AccountsHistory: healing via changesets checkpoint=157 sf_tip=158
+[22:36:31] waiting 120s for any re-inclusion
+[22:38:31] zone-0 tip=417 receipt=null
+[22:38:31] zone-1 tip=417 receipt=null
+[22:38:32] zone-2 tip=418 receipt=null
+[22:38:32] zone-rpc tip=419 receipt=null
+[22:38:32] sender balance on zone-1 after: 1000000000 [1e9] (before 1000000000 [1e9])
+[22:38:32] zone-0 hash@164=0x1f23ba3963f08e6182942e06038d2af57eabb8fd265c4f512068ec5e49ed9312
+[22:38:33] zone-1 hash@164=0x1f23ba3963f08e6182942e06038d2af57eabb8fd265c4f512068ec5e49ed9312
+[22:38:33] zone-2 hash@164=0x1f23ba3963f08e6182942e06038d2af57eabb8fd265c4f512068ec5e49ed9312

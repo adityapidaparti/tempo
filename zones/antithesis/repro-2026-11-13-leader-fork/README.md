@@ -15,3 +15,6 @@ worktree they were developed in (`~/src/wt/hunt`); edit `Z=` and the `cd` lines 
   - the slow-MDBX-commit `LD_PRELOAD` shim (`contrib/antithesis/zones/shim/slowsync.c`).
 - `evidence/` holds the Antithesis failed assertion and timeline for run
   `1b900239d3de50bcf4a2b9e2cbc8ed1a-67-0`, plus the logs of the local runs on unmodified product code.
+- `n4-finalized-loss.sh` reproduces finding 2 on unmodified product code. It pauses the leader's
+  commit with gdb, gets a success receipt for a transfer in a block the leader reports as
+  `finalized`, kills the leader, and shows the transfer has gone from every node.
