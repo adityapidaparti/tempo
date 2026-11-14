@@ -42,3 +42,8 @@ Before you run them:
   by a leader crash on unmodified code; the revoked key then signs a transfer and authenticates to
   the private RPC. It expects a running stack and `/tmp/keys.env` with "VPK V KPK K"; see the
   script header.
+- `refund/` reproduces finding 3 (refunds parked under a virtual address can never be claimed):
+  `up.sh` brings up the stack; `zone-variant.sh`, `l1-variant.sh` and `l1-registered.sh` are the
+  three cases. `l1-registered.sh` needs a registered virtual-address master, which takes a 32-bit
+  proof-of-work salt (about 13 minutes on 16 cores; the miner is in the author's
+  `hunt-logs/repro/refund/pow/`).

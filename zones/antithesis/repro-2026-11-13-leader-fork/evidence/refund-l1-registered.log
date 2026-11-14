@@ -1,0 +1,16 @@
+[05:43:25] master MA=0xdD2FD4581271e230360230F9337D5c0430Bf44C0 depositor U=0x8626f6940E2eb28930eFb4CeF49B2d1F2C9C1199 salt=0x0000000000000000000000000000000000000000000000000000000249c6d7af
+[05:43:26] registerVirtualMaster: status               1 (success) transactionHash      0xfd3f9f1dd844381d12fc242573ec86409b0e3153920e655dc60a91311ec1578d 
+[05:43:27] masterId=0xd60c4392 getMaster=0xdD2FD4581271e230360230F9337D5c0430Bf44C0  V=0xd60c4392fdfdfdfdfdfdfdfdfdfd000000000004 resolveRecipient(V)=0xdD2FD4581271e230360230F9337D5c0430Bf44C0
+[05:43:29] master blocks inbound (setReceivePolicy(0 REJECT_ALL,1,0)): status               1 (success) transactionHash      0x9eecdcccc51f525ba39e70d05c491b9f5cacb7d4b19d1c509ead4b6eeb561ba6 
+[05:43:29] validateReceivePolicy(T,portal,MA)=false 2 
+[05:43:30] BEFORE: U=18446744073659551615 MA=18446744073709551615 portal=8050000000
+[05:43:33] deposit(refund=0xd60c4392fdfdfdfdfdfdfdfdfdfd000000000004): status               1 (success) transactionHash      0x3d450dde1b8c022bab0931f58517906edd8bb0e21cb9bbe01904c37694b5daf6 
+[05:43:34]   bounce tx:   transactionHash: 0xe1d50b40e19a299fa34621df417cb021314ad75323cf0282d4ff4d8a57eda280 ; refunds(T,0xd60c4392fdfdfdfdfdfdfdfdfdfd000000000004)=30000000
+[05:43:38] deposit(refund=0xdD2FD4581271e230360230F9337D5c0430Bf44C0): status               1 (success) transactionHash      0x799b796960a662985f908fb19a7b19d0cb6cb260aa70890be07f1ba37092303e 
+[05:43:40]   bounce tx:   transactionHash: 0x403e87ac31634978982684baa0019a9ff68c838d501b7947817ed0fa12e47c09 ; refunds(T,0xdD2FD4581271e230360230F9337D5c0430Bf44C0)=30000000
+[05:43:42] master lifts block (setReceivePolicy(1,1,0)): status               1 (success) transactionHash      0x01ef996ed0775be30841157bbc2e0880d5ce94dc98b92395e76c17a67fbada95 
+[05:43:43] validateReceivePolicy(T,portal,MA)=true 0 
+[05:43:43] claimRefund sim from V (if V could sign): 30000000 [3e7]
+[05:43:45] claimRefund tx from MA: status               1 (success) transactionHash      0x7ffdbc268ea86379b269e0c9b18ee2b4d9a0d25141aedb4503ff4084e9f9aea0 
+[05:43:47] claimRefund tx from U:  status               1 (success) transactionHash      0xcde0dbcadde58485af74f9bae68bd0048409ec58569e8e03a7869da27df1df7d 
+[05:43:47] FINAL: refunds(T,V)=30000000 refunds(T,MA)=0 refunds(T,U)=0 U=18446744073599551615 MA=18446744073739551615 portal=8080000000

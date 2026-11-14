@@ -1,0 +1,29 @@
+[05:26:56] user U=0xeCe83e29c59a68F3a7C3C19a9AEDCf837c5E9DcD  VFB=0xdeadbeeffdfdfdfdfdfdfdfdfdfd000000000001  VTO=0xcafebabefdfdfdfdfdfdfdfdfdfd000000000002
+[05:26:57] registry on L1: resolveRecipient(VTO) -> Error: server returned an error response: error code 3: execution reverted: TIP20 registry error: VirtualAddressUnregistered(VirtualAddressUnregistered), data: "0xda56842c"
+[05:26:57] zone transfer-to-VFB sim: Error: server returned an error response: error code 3: execution reverted: TIP20 registry error: VirtualAddressUnregistered(VirtualAddressUnregistered), data: "0xda56842c"
+[05:26:58] BEFORE: U zone bal=999999998 [9.999e8] zone totalSupply=8000000000 [8e9] portal L1 escrow=8000000000 L1 bal(VTO)=0
+[05:26:58] withdrawal fee=0
+status               1 (success)
+transactionHash      0xaa38b58a66f41342bdd3346aa83160bc89619d4543adab70a2a59e40db826d33
+[05:26:58] requestWithdrawal(T, VTO, 100000000, 0, 0, VFB, 0x, 0x)
+blockNumber          800
+status               1 (success)
+transactionHash      0x62c8df829914af0bedc8811a57c28f6158c5a4323bcce506c7e1ff0e6f353202
+[05:26:59] AFTER request: U zone bal=899999996 [8.999e8]
+[05:26:59] waiting for L1 WithdrawalProcessed(VTO) ...
+  data: 0x00000000000000000000000020c00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000005f5e1000000000000000000000000000000000000000000000000000000000000000000
+--
+  topics: [
+--
+  transactionHash: 0xf8465ef7de90c6b86b7ee736050e5c6c2493ab947fb24cf219d65818745bb604
+[05:27:02] waiting for zone WithdrawalBounceBackPending ...
+  blockNumber: 803
+  data: 0x00000000000000000000000020c00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000005f5e100
+  transactionHash: 0xdacd1521485bc8b5f14721aa60a0d986de50f49960ce5dc3fa965ffd24f8b2ea
+[05:27:03] parked: refunds(T,VFB) viewed by sequencer=100000000 [1e8]  viewed as VFB=100000000 [1e8]  refunds(T,U)=0
+[05:27:03] claimRefund sim from U:   - server returned an error response: error code 3: execution reverted, data: "0xc6dfc201"
+[05:27:03] claimRefund sim from VFB: Error: server returned an error response: error code 3: execution reverted: TIP20 registry error: VirtualAddressUnregistered(VirtualAddressUnregistered), data: "0xda56842c"
+[05:27:03] claimRefund real tx from U:
+status               0 (failed)
+transactionHash      0x22d8c8babf6e563a8c6068741737ed4f9fbb2403deb94680e0e5ad8a6d46274b
+[05:27:04] FINAL: U zone bal=899999995 [8.999e8] VFB zone bal=0 zone totalSupply=7900000000 [7.9e9] portal L1 escrow=8000000000 L1 bal(VTO)=0

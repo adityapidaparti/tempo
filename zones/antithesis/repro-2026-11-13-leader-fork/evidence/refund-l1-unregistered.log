@@ -1,0 +1,22 @@
+[05:27:39] U=0x8626f6940E2eb28930eFb4CeF49B2d1F2C9C1199 V=0xfeedfacefdfdfdfdfdfdfdfdfdfd000000000003
+[05:27:39] decodeVirtualAddress(V)=true 0xfeedface 0x000000000003  getMaster(0xfeedface)=0x0000000000000000000000000000000000000000 resolveRecipient(V)=Error: server returned an error response: error code 3: execution reverted: TIP20 registry error: VirtualAddressUnregistered(VirtualAddressUnregistered), data: "0xda56842c"
+[05:27:40] keyIndex=0 depositFee=0 bouncebackFee=0
+[05:27:40] BEFORE: U L1 bal=18446744073709551615 portal escrow=8000000000 admin=18446744053709551615 refunds(T,V)=0 refunds(T,U)=0
+status               1 (success)
+transactionHash      0x99dfae32ea115addb31612abc361edffd88ff7907df6f8bd95f5501e5734c1c4
+[05:27:42] deposit(T,50000000,0,(G.x,2,rand64,rand12,rand16),V)
+blockNumber          905
+status               1 (success)
+transactionHash      0x2f5b054e22fc6456952a81943ff270b97f0cf440211e7acdb87c6678b0d8b096
+[05:27:44] AFTER deposit: U L1 bal=18446744073659551615 portal escrow=8050000000
+[05:27:44] waiting for zone DepositFailed and L1 DepositBounceBackPending(V) ...
+  blockNumber: 908
+  data: 0x00000000000000000000000020c00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000002faf0800000000000000000000000000000000000000000000000000000000000000000
+  transactionHash: 0x820dcd46a252f6d77d63deefb72579483d8d004a8af1b70398568a832b05c3f7
+[05:27:45] parked: refunds(T,V)=50000000 refunds(T,U)=0
+[05:27:45] claimRefund sim from U (depositor): 0
+[05:27:45] claimRefund sim from V:             - server returned an error response: error code 3: execution reverted, data: "0xbe51ced3"
+[05:27:45] claimRefund real tx from U:
+status               1 (success)
+transactionHash      0x5abf32371b476605bfd2986d2ccd96193660bede146123466d06e3645844fb16
+[05:27:48] FINAL: U L1 bal=18446744073659551615 V bal=0 portal escrow=8050000000 admin=18446744053709551615 refunds(T,V)=50000000
