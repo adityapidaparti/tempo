@@ -24,3 +24,17 @@ worktree they were developed in (`~/src/wt/hunt`); edit `Z=` and the `cd` lines 
 - `n4-double-spend.sh` turns finding 2 into a double spend on unmodified code. A payment
   reported as finalized vanishes after a leader crash, and the same funds are then spent to
   someone else and settled on L1.
+
+Before you run them:
+- Only one zones stack can run per Docker host (fixed container names and IPs). Run
+  `docker compose -p <project> down -v` on any running stack first.
+- The scripts write scratch files to `R=` (the author's `~/hunt-logs/repro`). Point `R=` at a
+  writable directory that holds these scripts.
+- They assume zone-0 is the leader, which holds on a fresh stack.
+- `n2-gdb-repro.sh up` uses the `:hunt` image tags. For unmodified product code, set
+  `ZONES_IMAGE`/`WORKLOAD_IMAGE` to images built from `8314f7ba`, as `n2-impact.sh` and
+  `n4-*.sh` do.
+- `cast receipt` waits for a receipt, so it never returns on a node that lacks the transaction. Use
+  `cast rpc eth_getTransactionReceipt`.
+- The images ship the slow-disk library from the Antithesis harness, inert at 0 ms. The gdb scripts
+  do not use it.
