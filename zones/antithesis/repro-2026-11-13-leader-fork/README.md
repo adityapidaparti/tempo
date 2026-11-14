@@ -38,3 +38,7 @@ Before you run them:
   `cast rpc eth_getTransactionReceipt`.
 - The images ship the slow-disk library from the Antithesis harness, inert at 0 ms. The gdb scripts
   do not use it.
+- `keys/testA.sh` (with `keys/common.sh`) shows a key revocation reported as finalized being undone
+  by a leader crash on unmodified code; the revoked key then signs a transfer and authenticates to
+  the private RPC. It expects a running stack and `/tmp/keys.env` with "VPK V KPK K"; see the
+  script header.

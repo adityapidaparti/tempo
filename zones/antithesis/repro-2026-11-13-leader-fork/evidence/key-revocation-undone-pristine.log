@@ -1,0 +1,34 @@
+[04:41:15] V=0xa345d44E71D4539bc31488b9f7A96C48F891cd45 K=0x9F27F83cF7b747047F2bDE015F2a145B33E371ab chain=5742371274753
+[04:41:15] before:
+[04:41:16]   zone-0 tip=219 getKey=(0, 0x9F27F83cF7b747047F2bDE015F2a145B33E371ab, 9999999999 [9.999e9], false, false) tokenInfo=200 {"jsonrpc":"2.0","result":{"account":"0xa345d44e71d4539bc31488b9f7a96c48f891cd45","expiresAt":"0x6af7f223"},"id":1}
+[04:41:16]   zone-1 tip=220 getKey=(0, 0x9F27F83cF7b747047F2bDE015F2a145B33E371ab, 9999999999 [9.999e9], false, false) tokenInfo=200 {"jsonrpc":"2.0","result":{"account":"0xa345d44e71d4539bc31488b9f7a96c48f891cd45","expiresAt":"0x6af7f223"},"id":1}
+[04:41:16]   zone-2 tip=220 getKey=(0, 0x9F27F83cF7b747047F2bDE015F2a145B33E371ab, 9999999999 [9.999e9], false, false) tokenInfo=200 {"jsonrpc":"2.0","result":{"account":"0xa345d44e71d4539bc31488b9f7a96c48f891cd45","expiresAt":"0x6af7f223"},"id":1}
+[04:41:29] leader MDBX commit paused; followers at 228
+blockHash            0x1e4e91f1c0cf63ca80ac0623dcc32fdc525ca485afbc714c1b226f42f104905d
+blockNumber          235
+status               1 (success)
+transactionHash      0x008ebb2d163207a3f9da5e5a9b6278a7f212dfb96ef8c6b010b5cb9aae940cbb
+[04:41:35] leader finalized=241 safe=242 revoke block=235
+[04:41:36] leader getKey (pre-crash) = (0, 0x0000000000000000000000000000000000000000, 0, false, true)
+[04:41:36] follower view pre-crash:
+[04:41:36]   zone-1 tip=228 getKey=(0, 0x9F27F83cF7b747047F2bDE015F2a145B33E371ab, 9999999999 [9.999e9], false, false)
+[04:41:36]   zone-2 tip=228 getKey=(0, 0x9F27F83cF7b747047F2bDE015F2a145B33E371ab, 9999999999 [9.999e9], false, false)
+[04:41:36] SIGKILL leader
+[04:41:37] restarted leader
+[04:41:46] after restart:
+[04:41:47]   zone-0 tip=247 getKey=(0, 0x9F27F83cF7b747047F2bDE015F2a145B33E371ab, 9999999999 [9.999e9], false, false) tokenInfo=200 {"jsonrpc":"2.0","result":{"account":"0xa345d44e71d4539bc31488b9f7a96c48f891cd45","expiresAt":"0x6af7f242"},"id":1}
+[04:41:47]   zone-1 tip=247 getKey=(0, 0x9F27F83cF7b747047F2bDE015F2a145B33E371ab, 9999999999 [9.999e9], false, false) tokenInfo=200 {"jsonrpc":"2.0","result":{"account":"0xa345d44e71d4539bc31488b9f7a96c48f891cd45","expiresAt":"0x6af7f242"},"id":1}
+[04:41:47]   zone-2 tip=248 getKey=(0, 0x9F27F83cF7b747047F2bDE015F2a145B33E371ab, 9999999999 [9.999e9], false, false) tokenInfo=200 {"jsonrpc":"2.0","result":{"account":"0xa345d44e71d4539bc31488b9f7a96c48f891cd45","expiresAt":"0x6af7f242"},"id":1}
+[04:41:48]   zone-0 revoke receipt=null hash@235=0xd2dbf9e0572a30515c8eda1d51af4ab4e319a27edb2130633b7cbbfa5cd81b0e
+[04:41:48]   zone-1 revoke receipt=null hash@235=0xd2dbf9e0572a30515c8eda1d51af4ab4e319a27edb2130633b7cbbfa5cd81b0e
+[04:41:49]   zone-2 revoke receipt=null hash@235=0xd2dbf9e0572a30515c8eda1d51af4ab4e319a27edb2130633b7cbbfa5cd81b0e
+[04:41:49] K-signed transfer from V after the confirmed revoke:
+blockNumber          252
+status               true
+transactionHash      0xcdabbd052811174e1ae3a87e03d93a7241ae84a52f3f5bbd3cbacd868fb1e0b7
+type                 118
+[04:41:50] eth_getBalance(V) with K token on zone-1: 200 {"jsonrpc":"2.0","result":"0x9612084f0316e0ebd5182f398e5195a51b5ca47667d4c9b26c9b26c9b26c9b2","id":1}
+[04:41:50] waiting 120s for any re-inclusion of revoke
+[04:43:50]   zone-0 tip=494 revoke receipt=null getKey=(0, 0x9F27F83cF7b747047F2bDE015F2a145B33E371ab, 9999999999 [9.999e9], false, false)
+[04:43:51]   zone-1 tip=494 revoke receipt=null getKey=(0, 0x9F27F83cF7b747047F2bDE015F2a145B33E371ab, 9999999999 [9.999e9], false, false)
+[04:43:51]   zone-2 tip=495 revoke receipt=null getKey=(0, 0x9F27F83cF7b747047F2bDE015F2a145B33E371ab, 9999999999 [9.999e9], false, false)
