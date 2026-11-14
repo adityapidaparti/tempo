@@ -18,3 +18,6 @@ worktree they were developed in (`~/src/wt/hunt`); edit `Z=` and the `cd` lines 
 - `n4-finalized-loss.sh` reproduces finding 2 on unmodified product code. It pauses the leader's
   commit with gdb, gets a success receipt for a transfer in a block the leader reports as
   `finalized`, kills the leader, and shows the transfer has gone from every node.
+- `n2b-settlement.sh [up]` reproduces finding 1's worst case on unmodified code. It holds the leader's
+  commit on a settlement-boundary block, lets L1 accept the batch, and kills the leader. The leader
+  then can never start again ("failed to resolve portal-confirmed Zone height for leader recovery").

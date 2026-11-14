@@ -1,0 +1,40 @@
+[00:32:58] image tempo-zones-antithesis:pristine; leader zone-0; portal before: zoneHeight=13840 blockHash=0xaa781f479fdde4705d0005a87fa82ff66d7ef2fbad4e8fc08a08e3de20abc242
+[00:33:09] attempt 1: leader static-file head=13868, target boundary H=13880
+[00:33:18]   commit hit (thread 68) with static-file head 13882 != 13880 -> release
+[00:33:19] attempt 2: leader static-file head=13888, target boundary H=13900
+[00:33:27]   commit hit (thread 68) with static-file head 13901 != 13900 -> release
+[00:33:28] attempt 3: leader static-file head=13906, target boundary H=13920
+[00:33:37] HELD leader MDBX commit with static-file head = boundary H=13920 (leader rpc hash 0x3315be20f1487bd0376423f9986910a0e6f7dcada8e1e57990070a2693428f2d); rpc tip z0=13925 z1=13919 z2=13919
+2026-11-14T00:34:03.783712Z  INFO zone::p2p: No peer block received recently; probing for backfill best=13919
+2026-11-14T00:34:03.970525Z  INFO process_block_range: zone::p2p: Broadcast settlement proposal digest=0xd9617b7a84f739ae3e94492d071cace8ac591efe820dce4addfe4f8bd9ea7e2f height=13920
+2026-11-14T00:34:04.152124Z  INFO run{outbox=0x1c00000000000000000000000000000000000002 inbox=0x1c00000000000000000000000000000000000001}: zone_sequencer::monitor: Batch successfully submitted to L1 last_zone_block=13920 blocks_in_batch=20 zone_from=13901 zone
+[00:34:08] L1 portal: zoneHeight=13920 blockHash=0x3315be20f1487bd0376423f9986910a0e6f7dcada8e1e57990070a2693428f2d
+[00:34:09] followers: z1 tip=13920 hash@13920=0x3315be20f1487bd0376423f9986910a0e6f7dcada8e1e57990070a2693428f2d; z2 tip=13920 hash@13920=0x3315be20f1487bd0376423f9986910a0e6f7dcada8e1e57990070a2693428f2d
+[00:34:09] leader commit still held: 3 hits, static-file head 
+[00:34:09] SIGKILL leader (supervisor kill) with MDBX commit of 13920 still pending
+[00:34:11] restarted leader
+AccountsHistory: healing via changesets checkpoint=13919 sf_tip=13920
+[00:34:42] post-restart: z0 tip=13919 hash@13920=none
+[00:35:43] t+91s tips z0=13919 z1=13920 z2=13920 rpc=13920 | zoneHeight=13920 blockHash=0x3315be20f1487bd0376423f9986910a0e6f7dcada8e1e57990070a2693428f2d
+[00:36:43] t+152s tips z0=13919 z1=13920 z2=13920 rpc=13920 | zoneHeight=13920 blockHash=0x3315be20f1487bd0376423f9986910a0e6f7dcada8e1e57990070a2693428f2d
+[00:37:44] t+212s tips z0=13919 z1=13920 z2=13920 rpc=13920 | zoneHeight=13920 blockHash=0x3315be20f1487bd0376423f9986910a0e6f7dcada8e1e57990070a2693428f2d
+[00:38:45] t+273s tips z0=13919 z1=13920 z2=13920 rpc=13920 | zoneHeight=13920 blockHash=0x3315be20f1487bd0376423f9986910a0e6f7dcada8e1e57990070a2693428f2d
+[00:39:45] t+334s tips z0=13919 z1=13920 z2=13920 rpc=13920 | zoneHeight=13920 blockHash=0x3315be20f1487bd0376423f9986910a0e6f7dcada8e1e57990070a2693428f2d
+[00:39:45] leader role/settlement errors since restart:
+      1 2026-11-14T00:39:45.873442Z ERROR zone::role: Role generation failed to start; fencing before retry generation=664 role="leader" err=failed to resolve portal-confirmed Zone height for leader recovery
+      1 2026-11-14T00:39:45.370627Z ERROR zone::role: Role generation failed to start; fencing before retry generation=663 role="leader" err=failed to resolve portal-confirmed Zone height for leader recovery
+      1 2026-11-14T00:39:44.867413Z ERROR zone::role: Role generation failed to start; fencing before retry generation=662 role="leader" err=failed to resolve portal-confirmed Zone height for leader recovery
+      1 2026-11-14T00:39:44.364831Z ERROR zone::role: Role generation failed to start; fencing before retry generation=661 role="leader" err=failed to resolve portal-confirmed Zone height for leader recovery
+      1 2026-11-14T00:39:43.861636Z ERROR zone::role: Role generation failed to start; fencing before retry generation=660 role="leader" err=failed to resolve portal-confirmed Zone height for leader recovery
+665
+2026-11-14T00:39:47.383858Z ERROR zone::role: Role generation failed to start; fencing before retry generation=667 role="leader" err=failed to resolve portal-confirmed Zone height for leader recovery
+[00:39:48] zone-1 last logs:
+2026-11-14T00:39:47.646509Z  INFO backfill: zone_l1::subscriber: Backfill complete from=15021 to=15021 blocks=1 elapsed_ms=1
+2026-11-14T00:39:47.868609Z  WARN reth_node_events::node: Beacon client online, but no consensus updates received for a while. This may be because of a reth error, or an error in the beacon client! Please investigate reth and beacon client logs! peri
+2026-11-14T00:39:48.146961Z  INFO zone_l1::subscriber: Synchronizing finalized L1 blocks from=15022 to=15022 blocks=1
+2026-11-14T00:39:48.148687Z  INFO backfill: zone_l1::subscriber: Backfill complete from=15022 to=15022 blocks=1 elapsed_ms=1
+[00:39:48] zone-2 last logs:
+2026-11-14T00:39:47.646595Z  INFO backfill: zone_l1::subscriber: Backfill complete from=15021 to=15021 blocks=1 elapsed_ms=1
+2026-11-14T00:39:47.927109Z  WARN reth_node_events::node: Beacon client online, but no consensus updates received for a while. This may be because of a reth error, or an error in the beacon client! Please investigate reth and beacon client logs! peri
+2026-11-14T00:39:48.145962Z  INFO zone_l1::subscriber: Synchronizing finalized L1 blocks from=15022 to=15022 blocks=1
+2026-11-14T00:39:48.147576Z  INFO backfill: zone_l1::subscriber: Backfill complete from=15022 to=15022 blocks=1 elapsed_ms=1
