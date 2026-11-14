@@ -1,0 +1,43 @@
+[11:31:37] sender 0x53693DC8D7B67FA2dB8f21F46C2Cd55c6fEAD0f7 nonce(zone-0)=0 bal=1000000000 [1e9]
+[11:31:37] tips: z0=573 z1=573 z2=573
+[11:31:41] partition zone-2 P2P: {"boot":[8958247804016500652,3178627084850985107],"id":[553464238773511132,1180302144195118371],"phase":"active","deadline_ms":1794656078275,"l1_mask":0,"p2p_mask":4,"updated_ms":1794655901444,"connec
+[11:31:46] tips after partition: z0=591 z2=574
+[11:31:47] submitted to zone-2: 0x763800bc1a6b37d9c64fc2fbf72d0d5b389762be55c3da443c6f068ca6a75163
+[11:31:52] zone-2 txpool_status: {"pending":"0x1","queued":"0x0"}
+[11:31:52] zone-2 getTx: {"type":"0x2","chainId":"0x53900000001","nonce":"0x0","gas":"0x7a120","maxFeePerGas":"0x1","maxPriorityFeePerGas":"0x1","to":"0x20c00000000000000000000000000000
+[11:31:52] zone-0 getTx: null
+[11:31:52] zone-2 receipt: null
+[11:31:52] tips: z0=603 z2=574
+[11:31:52] backup file before stop: ls: cannot access '/data/node/txpool-transactions-backup.rlp': No such file or directory
+[11:31:53] SIGTERM tempo-zone pid 11 in zone-2
+[11:31:54] zone-2 running=false exit=0
+2026-11-14T11:31:53.140583Z  INFO reth::cli: Shutdown signal received — flushing engine state
+2026-11-14T11:31:53.140902Z  INFO txpool: Saving current local transactions txs_file="/data/node/txpool-transactions-backup.rlp" num_txs=1
+2026-11-14T11:31:53.141056Z  INFO txpool: Wrote local transactions to file txs_file="/data/node/txpool-transactions-backup.rlp"
+zone-supervisor[2]: unexpected child exit 0
+[11:31:54] backup file after stop: -rw-r--r-- 1 exedev exedev 385 Nov 14 11:31 /home/exedev/hunt-logs/repro/txbackup/backup.rlp
+[11:31:54] backup contains tx raw body? 0  hex=5b7b22726c70223a2230783032663861653836303533393030303030303031383030313031383330376131323039343230633030303030303030303030303030303030303030303030303030303030303030303030303038306238343461393035396362
+[11:31:54] renewed partition: {"boot":[8958247804016500652,3178627084850985107],"id":[2971365829654837023,4734110263671847135],"phase":"active","deadline_ms":1794656094720,"l1_mask":0,"p2p_mask":4,"updated_ms":1794655914919,"conne
+[11:31:55] docker start zone-2
+[11:31:56] backup file gone (t+2s)
+[11:32:01] restart log (backup / token discovery / txpool):
+2026-11-14T11:31:55.840879150Z 2026-11-14T11:31:55.840765Z  INFO txpool: Successfully reinserted local transactions from file txs_file="/data/node/txpool-transactions-backup.rlp" num_txs=1
+2026-11-14T11:31:55.846293026Z 2026-11-14T11:31:55.846165Z  INFO reth::cli: Discovered enabled tokens from L1 count=1 enabled_tokens=[0x20c0000000000000000000000000000000000000] block_number=595
+2026-11-14T11:31:55.852345535Z 2026-11-14T11:31:55.852168Z  INFO connect{l1_rpc_url=ws://10.20.0.43:8546}: zone_l1::subscriber: Connecting to L1 node url=ws://10.20.0.43:8546
+2026-11-14T11:31:55.853518583Z 2026-11-14T11:31:55.853422Z  INFO connect{l1_rpc_url=ws://10.20.0.43:8546}: zone_l1::subscriber: Connected to L1 node
+2026-11-14T11:31:55.863538622Z 2026-11-14T11:31:55.863353Z  INFO reth::cli: RPC HTTP server started url=0.0.0.0:8545
+2026-11-14T11:31:55.863561132Z 2026-11-14T11:31:55.863381Z  INFO reth::cli: RPC WS server started url=0.0.0.0:8546
+2026-11-14T11:31:55.865334289Z 2026-11-14T11:31:55.865063Z  INFO zone::rpc: Starting redacted zone RPC server local_addr=0.0.0.0:8544
+2026-11-14T11:31:55.865366054Z 2026-11-14T11:31:55.865128Z  INFO reth::cli: Redacted zone RPC server started local_addr=0.0.0.0:8544
+[11:32:01] after restart, still partitioned: zone-2 txpool_status: {"pending":"0x0","queued":"0x0"}
+[11:32:01] zone-2 getTx: null
+[11:32:02] backup file now: ls: cannot access '/data/node/txpool-transactions-backup.rlp': No such file or directory
+[11:32:05] healed: {"boot":[8958247804016500652,3178627084850985107],"id":[2971365829654837023,4734110263671847135],"phase":"cancelled","deadline_ms":1794656094720,"l1_mask":0,"p2p_mask":0,"updated_ms":1794655925295,"co
+[11:33:05] tips: z0=748 z2=748
+[11:33:05] zone-0 getTx: {"type":"0x2","chainId":"0x53900000001","nonce":"0x0","gas":"0x7a120","maxFeePerGas":"0x1","maxPriorityFeePerGas":"0x1","to":"0x20c00000000000000000000000000000 receipt: {"type":"0x2","status":"0x1","cumulativeGasUsed":"0x5dbd4","logs":[{"address":"0x20c000000000000000000000000000000000000
+[11:33:06] zone-1 getTx: {"type":"0x2","chainId":"0x53900000001","nonce":"0x0","gas":"0x7a120","maxFeePerGas":"0x1","maxPriorityFeePerGas":"0x1","to":"0x20c00000000000000000000000000000 receipt: {"type":"0x2","status":"0x1","cumulativeGasUsed":"0x5dbd4","logs":[{"address":"0x20c000000000000000000000000000000000000
+[11:33:06] zone-2 getTx: {"type":"0x2","chainId":"0x53900000001","nonce":"0x0","gas":"0x7a120","maxFeePerGas":"0x1","maxPriorityFeePerGas":"0x1","to":"0x20c00000000000000000000000000000 receipt: {"type":"0x2","status":"0x1","cumulativeGasUsed":"0x5dbd4","logs":[{"address":"0x20c000000000000000000000000000000000000
+[11:33:06] zone-0 nonce(0x53693DC8D7B67FA2dB8f21F46C2Cd55c6fEAD0f7)=1
+[11:33:06] CONTROL: resubmitting identical raw tx to zone-2
+[11:33:06]   -> Error: server returned an error response: error code -32000: nonce too low: next nonce 1, tx nonce 0
+[11:33:07]   zone-0 receipt: {"status":"0x1","cumulativeGasUsed":"0x5dbd4","logs":[{"address":"0x20c0000000000000000000000000000000000000","topics":["0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef","0x00000000
