@@ -1,0 +1,14 @@
+seed: funded 8 zone accounts
+[02:34:22] Alice 0x2bd5d081C349c330b82E1d73D38765b0b8d69C32 balance 1000000000; Merchant 0x82f8614D2ed6e2C55f0c5F39BafF8a598D7E6AC5 1000000000; Bob 0x68DdE8f956259Ce41458cE582EFD8e1572C7e600 1000000000
+[02:34:33] leader's database commit paused
+[02:34:35] PAYMENT 1 Alice->Merchant 900000000: tx 0x999b5548df07ae225dfd4fe816193278d0906c94e52aec7cae9da0dde829bfdf status 1 block 164
+[02:34:39] merchant's view on the leader: finalized block=170 (>= 164), merchant balance=1900000000, alice=99999999
+[02:34:39] leader crashes
+[02:35:02] after restart: payment 1 receipt on every node: z0[] z1[] rpc[]
+[02:35:03] after restart: alice=1000000000 merchant=1000000000
+[02:35:03] PAYMENT 2 Alice->Bob 900000000 (same funds): tx 0xd2ebb5a6f3015205146568fddd79bddf42876f7ceed9724cb9d85a9aea0d6a88 status 1 block 203
+[02:35:13] L1 portal settled through zone block 220 (payment 2 in block 203)
+[02:35:13] zone-0: merchant=1000000000 bob=1900000000 alice=99999999 payment1[] payment2["status":"0x1" "blockNumber":"0xcb" ]
+[02:35:14] zone-1: merchant=1000000000 bob=1900000000 alice=99999999 payment1[] payment2["status":"0x1" "blockNumber":"0xcb" ]
+[02:35:15] zone-2: merchant=1000000000 bob=1900000000 alice=99999999 payment1[] payment2["status":"0x1" "blockNumber":"0xcb" ]
+[02:35:16] zone-rpc: merchant=1000000000 bob=1900000000 alice=99999999 payment1[] payment2["status":"0x1" "blockNumber":"0xcb" ]

@@ -21,3 +21,6 @@ worktree they were developed in (`~/src/wt/hunt`); edit `Z=` and the `cd` lines 
 - `n2b-settlement.sh [up]` reproduces finding 1's worst case on unmodified code. It holds the leader's
   commit on a settlement-boundary block, lets L1 accept the batch, and kills the leader. The leader
   then can never start again ("failed to resolve portal-confirmed Zone height for leader recovery").
+- `n4-double-spend.sh` turns finding 2 into a double spend on unmodified code. A payment
+  reported as finalized vanishes after a leader crash, and the same funds are then spent to
+  someone else and settled on L1.
