@@ -1,4 +1,4 @@
-# Reproducing the 2026-11-13 leader-fork finding
+# Reproduction scripts for FINDINGS-2026-11-16.md
 
 The scripts drive the zones Docker harness from Alexey's quorum-handoff configuration
 (`tempoxyz/tempo@8314f7ba`, `contrib/antithesis/zones`). Paths inside the scripts point at the
@@ -42,7 +42,7 @@ Before you run them:
   by a leader crash on unmodified code; the revoked key then signs a transfer and authenticates to
   the private RPC. It expects a running stack and `/tmp/keys.env` with "VPK V KPK K"; see the
   script header.
-- `refund/` reproduces finding 3 (refunds parked under a virtual address can never be claimed):
+- `refund/` reproduces finding 4 (refunds parked under a virtual address can never be claimed):
   `up.sh` brings up the stack; `zone-variant.sh`, `l1-variant.sh` and `l1-registered.sh` are the
   three cases. `l1-registered.sh` needs a registered virtual-address master, which takes a 32-bit
   proof-of-work salt (about 13 minutes on 16 cores; the miner is `refund/pow/pow.c`).
