@@ -2,7 +2,7 @@
 
 The scripts drive the zones Docker harness from Alexey's quorum-handoff configuration
 (`tempoxyz/tempo@8314f7ba`, `contrib/antithesis/zones`). Paths inside the scripts point at the
-worktree they were developed in (`~/src/wt/hunt`); edit `Z=` and the `cd` lines for your checkout.
+checkout they were developed in; edit `Z=` and the `cd` lines for your checkout.
 
 - `n2-gdb-repro.sh up` builds the stack (compose project `n2repro`, `ZONES_IMAGE`).
 - `n2-gdb-hold.sh` is the deterministic fork, gdb only. It runs in about 75 s once the stack is up.
@@ -28,7 +28,7 @@ worktree they were developed in (`~/src/wt/hunt`); edit `Z=` and the `cd` lines 
 Before you run them:
 - Only one zones stack can run per Docker host (fixed container names and IPs). Run
   `docker compose -p <project> down -v` on any running stack first.
-- The scripts write scratch files to `R=` (the author's `~/hunt-logs/repro`). Point `R=` at a
+- The scripts write scratch files to `R=` (set for the original environment). Point `R=` at a
   writable directory that holds these scripts.
 - They assume zone-0 is the leader, which holds on a fresh stack.
 - `n2-gdb-repro.sh up` uses the `:hunt` image tags. For unmodified product code, set

@@ -1,0 +1,19 @@
+== rate 200
+blocks 2442..2560 over 59.0s (2.00 blk/s); user txs 11906 => 201.7 tx/s
+F1 lag blocks med/p99/max 0/1/1  ms med/p99/max 175/230/252
+F2 lag blocks med/p99/max 0/1/1  ms med/p99/max 175/251/252
+durable (db read, n=2) lag lower-bound med/p99/max -1/-1/-1  upper med/max 1/1
+[22:27:05.709] load rate=200.0 sent_ok=14036 (+200.0/s) err=0 last=[]
+[22:27:10.709] load rate=200.0 sent_ok=15034 (+199.6/s) err=0 last=[]
+== rate 400
+blocks 2607..2725 over 59.0s (2.00 blk/s); user txs 20435 => 346.3 tx/s
+F1 lag blocks med/p99/max 0/1/1  ms med/p99/max 176/251/253
+F2 lag blocks med/p99/max 0/1/1  ms med/p99/max 176/255/276
+[22:28:28.331] load rate=400.0 sent_ok=24245 (+330.8/s) err=0 last=[]
+[22:28:33.331] load rate=400.0 sent_ok=25866 (+324.2/s) err=0 last=[]
+== rate 800
+blocks 2772..2890 over 59.0s (2.00 blk/s); user txs 20947 => 355.0 tx/s
+F1 lag blocks med/p99/max 0/1/1  ms med/p99/max 176/251/251
+F2 lag blocks med/p99/max 0/1/1  ms med/p99/max 176/227/276
+[22:29:50.965] load rate=800.0 sent_ok=24886 (+337.6/s) err=0 last=[]
+[22:29:55.965] load rate=800.0 sent_ok=26604 (+343.6/s) err=0 last=[]

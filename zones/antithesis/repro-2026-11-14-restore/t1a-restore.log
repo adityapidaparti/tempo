@@ -1,0 +1,31 @@
+[21:42:28] post-backup transfer: blockHash=0x70940cd78dc159db16e7b5c92c7c31f913895eb76a715906cd2bedca23b8ae9d blockNumber=427 status=1 transactionHash=0x763800bc1a6b37d9c64fc2fbf72d0d5b389762be55c3da443c6f068ca6a75163 
+[21:42:28] pre-restore: zone-0 tip=427 zone-1 tip=427 zone-2 tip=427 zone-rpc tip=427  portal=420 0x16c336e2ef841f71ce625dbc396ad0d1d3cf7fc1e7ab2ce7172faef68acfbaad
+[21:42:54] restored+started zone-0
+[21:43:54] after: zone-0 tip=348 zone-1 tip=428 zone-2 tip=428 zone-rpc tip=428  portal=420 0x16c336e2ef841f71ce625dbc396ad0d1d3cf7fc1e7ab2ce7172faef68acfbaad
+      1 2026-11-14T21:43:54.818942Z ERROR zone::role: Role generation failed to start; fencing before retry generation=119 role="leader" err=failed to resolve portal-confirmed Zone height for leader recovery
+      1 2026-11-14T21:43:54.817143Z  INFO zone::role: Promotion barrier satisfied epoch=1 next_anchor=370
+      1 2026-11-14T21:43:54.315113Z ERROR zone::role: Role generation failed to start; fencing before retry generation=118 role="leader" err=failed to resolve portal-confirmed Zone height for leader recovery
+      1 2026-11-14T21:43:54.311863Z  INFO zone::role: Promotion barrier satisfied epoch=1 next_anchor=370
+      1 2026-11-14T21:43:53.810783Z ERROR zone::role: Role generation failed to start; fencing before retry generation=117 role="leader" err=failed to resolve portal-confirmed Zone height for leader recovery
+      1 2026-11-14T21:43:53.808708Z  INFO zone::role: Promotion barrier satisfied epoch=1 next_anchor=370
+      1 2026-11-14T21:43:53.307455Z ERROR zone::role: Role generation failed to start; fencing before retry generation=116 role="leader" err=failed to resolve portal-confirmed Zone height for leader recovery
+      1 2026-11-14T21:43:53.305246Z  INFO zone::role: Promotion barrier satisfied epoch=1 next_anchor=370
+      1 2026-11-14T21:43:52.803473Z ERROR zone::role: Role generation failed to start; fencing before retry generation=115 role="leader" err=failed to resolve portal-confirmed Zone height for leader recovery
+      1 2026-11-14T21:43:52.801448Z  INFO zone::role: Promotion barrier satisfied epoch=1 next_anchor=370
+      1 2026-11-14T21:43:52.300704Z ERROR zone::role: Role generation failed to start; fencing before retry generation=114 role="leader" err=failed to resolve portal-confirmed Zone height for leader recovery
+      1 2026-11-14T21:43:52.298546Z  INFO zone::role: Promotion barrier satisfied epoch=1 next_anchor=370
+      1 2026-11-14T21:43:51.797328Z ERROR zone::role: Role generation failed to start; fencing before retry generation=113 role="leader" err=failed to resolve portal-confirmed Zone height for leader recovery
+      1 2026-11-14T21:43:51.795223Z  INFO zone::role: Promotion barrier satisfied epoch=1 next_anchor=370
+      1 2026-11-14T21:43:51.293124Z ERROR zone::role: Role generation failed to start; fencing before retry generation=112 role="leader" err=failed to resolve portal-confirmed Zone height for leader recovery
+      1 2026-11-14T21:43:51.290989Z  INFO zone::role: Promotion barrier satisfied epoch=1 next_anchor=370
+      1 2026-11-14T21:43:50.789230Z ERROR zone::role: Role generation failed to start; fencing before retry generation=111 role="leader" err=failed to resolve portal-confirmed Zone height for leader recovery
+      1 2026-11-14T21:43:50.787004Z  INFO zone::role: Promotion barrier satisfied epoch=1 next_anchor=370
+      1 2026-11-14T21:43:50.285091Z ERROR zone::role: Role generation failed to start; fencing before retry generation=110 role="leader" err=failed to resolve portal-confirmed Zone height for leader recovery
+      1 2026-11-14T21:43:50.282647Z  INFO zone::role: Promotion barrier satisfied epoch=1 next_anchor=370
+== zone-1
+2026-11-14T21:43:28.697786Z  WARN zone::p2p: Backfill peer is behind the requested range; trying other eligible peers peer=d04ab232742bb4ab3a1368bd4615e4e6d0224ab71a016baf8520a332c9778737 request_id=6 requested_start=429 tip_height=348
+== zone-2
+2026-11-14T21:42:58.699188Z  WARN zone::p2p: Backfill peer is behind the requested range; trying other eligible peers peer=d04ab232742bb4ab3a1368bd4615e4e6d0224ab71a016baf8520a332c9778737 request_id=5 requested_start=429 tip_height=348
+2026-11-14T21:43:28.700718Z  WARN zone::p2p: Backfill peer is behind the requested range; trying other eligible peers peer=d04ab232742bb4ab3a1368bd4615e4e6d0224ab71a016baf8520a332c9778737 request_id=7 requested_start=429 tip_height=348
+== zone-rpc
+2026-11-14T21:42:58.696911Z  WARN zone::p2p: Backfill peer is behind the requested range; trying other eligible peers peer=d04ab232742bb4ab3a1368bd4615e4e6d0224ab71a016baf8520a332c9778737 request_id=4 requested_start=429 tip_height=348

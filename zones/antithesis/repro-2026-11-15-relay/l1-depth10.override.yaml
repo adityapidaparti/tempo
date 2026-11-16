@@ -1,0 +1,39 @@
+services:
+  l1:
+    command:
+      - node
+      - --chain
+      - /opt/zones/l1-genesis.json
+      - --dev
+      - --dev.block-time
+      - 500ms
+      - --dev.finality-depth
+      - "10"
+      - --engine.persistence-threshold
+      - "0"
+      - --engine.memory-block-buffer-target
+      - "0"
+      - --datadir
+      - /data
+      - --http
+      - --http.addr
+      - 0.0.0.0
+      - --http.port
+      - "8545"
+      - --http.api
+      - all
+      - --ws
+      - --ws.addr
+      - 0.0.0.0
+      - --ws.port
+      - "8546"
+      - --ws.api
+      - all
+      - --rpc.eth-proof-window
+      - "100000"
+      - --tempo.bootnodes-endpoint
+      - none
+      - --disable-discovery
+      - --no-persist-peers
+      - --color
+      - never

@@ -1,0 +1,100 @@
+=== round 1 mode=window A=zone-0 B=zone-2 relay=zone-1
+  mode=window target=0x9965507D1a55bcC2695C58ba16FB37d819B0A4dc
+02:42:14.111 pre latest=[0x9965507D1a55bcC2695C58ba16FB37d819B0A4dc 1] finalized=[0x9965507D1a55bcC2695C58ba16FB37d819B0A4dc 1] blk=199
+02:42:14.340 admin setLeader(0x14dC79964da2C08b23698B3D3cc7Ca32193d9955,1) tx=0x8b545fcf3f86527c6f554f164c2f1b212e8840eb8666e9fd2c70a218d6538582
+02:42:14.428 receipt status=0x1 block=0xc8
+02:42:14.497 relay-reply {"status":"alreadyActive","relayer":"0x976ea74026e726554db657fa54763abd0c3a0aa9","requestedLeader":"0x9965507d1a55bcc2695c58ba16fb37d819b0a4dc"}
+02:42:14.496 during finalized=[0x9965507D1a55bcC2695C58ba16FB37d819B0A4dc 1] latest=[0x14dC79964da2C08b23698B3D3cc7Ca32193d9955 2] finblk=191
+02:42:14.726 admin receipt {"status":"0x1","blockNumber":"0xc8"}
+02:42:26.758 post latest=[0x14dC79964da2C08b23698B3D3cc7Ca32193d9955 2] finalized=[0x14dC79964da2C08b23698B3D3cc7Ca32193d9955 2]
+  zone-2: 2026-11-15T02:42:18.870347Z  INFO zone::role: Leader generation started generation=2 epoch=2
+=== round 2 mode=window A=zone-2 B=zone-0 relay=zone-1
+  mode=window target=0x14dC79964da2C08b23698B3D3cc7Ca32193d9955
+02:42:27.328 pre latest=[0x14dC79964da2C08b23698B3D3cc7Ca32193d9955 2] finalized=[0x14dC79964da2C08b23698B3D3cc7Ca32193d9955 2] blk=226
+02:42:27.635 admin setLeader(0x9965507D1a55bcC2695C58ba16FB37d819B0A4dc,2) tx=0xee053d0393c987c6915d26096aabbe76ff142ed085cbfe2cca5d25dd2a9c63f6
+02:42:27.917 receipt status=0x1 block=0xe3
+02:42:27.977 relay-reply {"status":"alreadyActive","relayer":"0x976ea74026e726554db657fa54763abd0c3a0aa9","requestedLeader":"0x14dc79964da2c08b23698b3d3cc7ca32193d9955"}
+02:42:27.977 during finalized=[0x14dC79964da2C08b23698B3D3cc7Ca32193d9955 2] latest=[0x9965507D1a55bcC2695C58ba16FB37d819B0A4dc 3] finblk=218
+02:42:28.210 admin receipt {"status":"0x1","blockNumber":"0xe3"}
+02:42:40.243 post latest=[0x9965507D1a55bcC2695C58ba16FB37d819B0A4dc 3] finalized=[0x9965507D1a55bcC2695C58ba16FB37d819B0A4dc 3]
+  zone-0: 2026-11-15T02:42:32.369275Z  INFO zone::role: Leader generation started generation=3 epoch=3
+=== round 3 mode=window A=zone-0 B=zone-2 relay=zone-1
+  mode=window target=0x9965507D1a55bcC2695C58ba16FB37d819B0A4dc
+02:42:40.832 pre latest=[0x9965507D1a55bcC2695C58ba16FB37d819B0A4dc 3] finalized=[0x9965507D1a55bcC2695C58ba16FB37d819B0A4dc 3] blk=253
+02:42:41.146 admin setLeader(0x14dC79964da2C08b23698B3D3cc7Ca32193d9955,3) tx=0xacf47723c0b04eed146662ce2fb2f444f0cb83cf3da015e0dd4a4888094838d3
+02:42:41.428 receipt status=0x1 block=0xfe
+02:42:41.489 relay-reply {"status":"alreadyActive","relayer":"0x976ea74026e726554db657fa54763abd0c3a0aa9","requestedLeader":"0x9965507d1a55bcc2695c58ba16fb37d819b0a4dc"}
+02:42:41.489 during finalized=[0x9965507D1a55bcC2695C58ba16FB37d819B0A4dc 3] latest=[0x14dC79964da2C08b23698B3D3cc7Ca32193d9955 4] finblk=245
+02:42:41.705 admin receipt {"status":"0x1","blockNumber":"0xfe"}
+02:42:53.736 post latest=[0x14dC79964da2C08b23698B3D3cc7Ca32193d9955 4] finalized=[0x14dC79964da2C08b23698B3D3cc7Ca32193d9955 4]
+  zone-2: 2026-11-15T02:42:45.868514Z  INFO zone::role: Leader generation started generation=4 epoch=4
+=== round 4 mode=window A=zone-2 B=zone-0 relay=zone-1
+  mode=window target=0x14dC79964da2C08b23698B3D3cc7Ca32193d9955
+02:42:54.312 pre latest=[0x14dC79964da2C08b23698B3D3cc7Ca32193d9955 4] finalized=[0x14dC79964da2C08b23698B3D3cc7Ca32193d9955 4] blk=280
+02:42:54.610 admin setLeader(0x9965507D1a55bcC2695C58ba16FB37d819B0A4dc,4) tx=0xbf6aebce687193b83392c26e437240b66d2b240978f3a80daaa35d9b28e2c352
+02:42:54.912 receipt status=0x1 block=0x119
+02:42:54.975 relay-reply {"status":"alreadyActive","relayer":"0x976ea74026e726554db657fa54763abd0c3a0aa9","requestedLeader":"0x14dc79964da2c08b23698b3d3cc7ca32193d9955"}
+02:42:54.975 during finalized=[0x14dC79964da2C08b23698B3D3cc7Ca32193d9955 4] latest=[0x9965507D1a55bcC2695C58ba16FB37d819B0A4dc 5] finblk=272
+02:42:55.222 admin receipt {"status":"0x1","blockNumber":"0x119"}
+02:43:07.256 post latest=[0x9965507D1a55bcC2695C58ba16FB37d819B0A4dc 5] finalized=[0x9965507D1a55bcC2695C58ba16FB37d819B0A4dc 5]
+  zone-0: 2026-11-15T02:42:59.369133Z  INFO zone::role: Leader generation started generation=5 epoch=5
+=== round 5 mode=window A=zone-0 B=zone-2 relay=zone-1
+  mode=window target=0x9965507D1a55bcC2695C58ba16FB37d819B0A4dc
+02:43:07.850 pre latest=[0x9965507D1a55bcC2695C58ba16FB37d819B0A4dc 5] finalized=[0x9965507D1a55bcC2695C58ba16FB37d819B0A4dc 5] blk=307
+02:43:08.169 admin setLeader(0x14dC79964da2C08b23698B3D3cc7Ca32193d9955,5) tx=0x7755878a5fa02d9fdeef220b591b60a4fb299c4912ff9e35292daac59b92e2f8
+02:43:08.426 receipt status=0x1 block=0x134
+02:43:08.508 relay-reply {"status":"alreadyActive","relayer":"0x976ea74026e726554db657fa54763abd0c3a0aa9","requestedLeader":"0x9965507d1a55bcc2695c58ba16fb37d819b0a4dc"}
+02:43:08.509 during finalized=[0x9965507D1a55bcC2695C58ba16FB37d819B0A4dc 5] latest=[0x14dC79964da2C08b23698B3D3cc7Ca32193d9955 6] finblk=299
+02:43:08.723 admin receipt {"status":"0x1","blockNumber":"0x134"}
+02:43:20.755 post latest=[0x14dC79964da2C08b23698B3D3cc7Ca32193d9955 6] finalized=[0x14dC79964da2C08b23698B3D3cc7Ca32193d9955 6]
+  zone-2: 2026-11-15T02:43:12.866955Z  INFO zone::role: Leader generation started generation=6 epoch=6
+=== round 6 mode=window A=zone-2 B=zone-0 relay=zone-1
+  mode=window target=0x14dC79964da2C08b23698B3D3cc7Ca32193d9955
+02:43:21.332 pre latest=[0x14dC79964da2C08b23698B3D3cc7Ca32193d9955 6] finalized=[0x14dC79964da2C08b23698B3D3cc7Ca32193d9955 6] blk=334
+02:43:21.633 admin setLeader(0x9965507D1a55bcC2695C58ba16FB37d819B0A4dc,6) tx=0xcd8b25774a90b72b1e3ccef02648970a9f1c2032af07f90458dd6fe16bd55b9d
+02:43:21.923 receipt status=0x1 block=0x14f
+02:43:21.987 relay-reply {"status":"alreadyActive","relayer":"0x976ea74026e726554db657fa54763abd0c3a0aa9","requestedLeader":"0x14dc79964da2c08b23698b3d3cc7ca32193d9955"}
+02:43:21.987 during finalized=[0x14dC79964da2C08b23698B3D3cc7Ca32193d9955 6] latest=[0x9965507D1a55bcC2695C58ba16FB37d819B0A4dc 7] finblk=326
+02:43:22.211 admin receipt {"status":"0x1","blockNumber":"0x14f"}
+02:43:34.243 post latest=[0x9965507D1a55bcC2695C58ba16FB37d819B0A4dc 7] finalized=[0x9965507D1a55bcC2695C58ba16FB37d819B0A4dc 7]
+  zone-0: 2026-11-15T02:43:26.362954Z  INFO zone::role: Leader generation started generation=7 epoch=7
+=== round 7 mode=window A=zone-0 B=zone-2 relay=zone-1
+  mode=window target=0x9965507D1a55bcC2695C58ba16FB37d819B0A4dc
+02:43:34.915 pre latest=[0x9965507D1a55bcC2695C58ba16FB37d819B0A4dc 7] finalized=[0x9965507D1a55bcC2695C58ba16FB37d819B0A4dc 7] blk=361
+02:43:35.172 admin setLeader(0x14dC79964da2C08b23698B3D3cc7Ca32193d9955,7) tx=0x26fcf4d7aa17e4fae6a2a5416c2bade6af657724d9b7ee95b11da580863e66ff
+02:43:35.416 receipt status=0x1 block=0x16a
+02:43:35.476 relay-reply {"status":"alreadyActive","relayer":"0x976ea74026e726554db657fa54763abd0c3a0aa9","requestedLeader":"0x9965507d1a55bcc2695c58ba16fb37d819b0a4dc"}
+02:43:35.476 during finalized=[0x9965507D1a55bcC2695C58ba16FB37d819B0A4dc 7] latest=[0x14dC79964da2C08b23698B3D3cc7Ca32193d9955 8] finblk=353
+02:43:35.679 admin receipt {"status":"0x1","blockNumber":"0x16a"}
+02:43:47.712 post latest=[0x14dC79964da2C08b23698B3D3cc7Ca32193d9955 8] finalized=[0x14dC79964da2C08b23698B3D3cc7Ca32193d9955 8]
+  zone-2: 2026-11-15T02:43:39.864664Z  INFO zone::role: Leader generation started generation=8 epoch=8
+=== round 8 mode=window A=zone-2 B=zone-0 relay=zone-1
+  mode=window target=0x14dC79964da2C08b23698B3D3cc7Ca32193d9955
+02:43:48.261 pre latest=[0x14dC79964da2C08b23698B3D3cc7Ca32193d9955 8] finalized=[0x14dC79964da2C08b23698B3D3cc7Ca32193d9955 8] blk=388
+02:43:48.524 admin setLeader(0x9965507D1a55bcC2695C58ba16FB37d819B0A4dc,8) tx=0xecb68a967c7b49eb8f79b9b92ec48daffc19b7174909d3b8716b1ee5a6fa9a5c
+02:43:48.921 receipt status=0x1 block=0x185
+02:43:48.982 relay-reply {"status":"alreadyActive","relayer":"0x976ea74026e726554db657fa54763abd0c3a0aa9","requestedLeader":"0x14dc79964da2c08b23698b3d3cc7ca32193d9955"}
+02:43:48.982 during finalized=[0x14dC79964da2C08b23698B3D3cc7Ca32193d9955 8] latest=[0x9965507D1a55bcC2695C58ba16FB37d819B0A4dc 9] finblk=380
+02:43:49.224 admin receipt {"status":"0x1","blockNumber":"0x185"}
+02:44:01.258 post latest=[0x9965507D1a55bcC2695C58ba16FB37d819B0A4dc 9] finalized=[0x9965507D1a55bcC2695C58ba16FB37d819B0A4dc 9]
+  zone-0: 2026-11-15T02:43:53.374378Z  INFO zone::role: Leader generation started generation=9 epoch=9
+=== round 9 mode=window A=zone-0 B=zone-2 relay=zone-1
+  mode=window target=0x9965507D1a55bcC2695C58ba16FB37d819B0A4dc
+02:44:01.929 pre latest=[0x9965507D1a55bcC2695C58ba16FB37d819B0A4dc 9] finalized=[0x9965507D1a55bcC2695C58ba16FB37d819B0A4dc 9] blk=415
+02:44:02.182 admin setLeader(0x14dC79964da2C08b23698B3D3cc7Ca32193d9955,9) tx=0xdc41a83057abc37c5214514d7c48f7aea23e98f45489d945bc903133cfc27921
+02:44:02.383 receipt status=0x1 block=0x1a0
+02:44:02.460 relay-reply {"status":"alreadyActive","relayer":"0x976ea74026e726554db657fa54763abd0c3a0aa9","requestedLeader":"0x9965507d1a55bcc2695c58ba16fb37d819b0a4dc"}
+02:44:02.460 during finalized=[0x9965507D1a55bcC2695C58ba16FB37d819B0A4dc 9] latest=[0x14dC79964da2C08b23698B3D3cc7Ca32193d9955 10] finblk=407
+02:44:02.687 admin receipt {"status":"0x1","blockNumber":"0x1a0"}
+02:44:14.735 post latest=[0x14dC79964da2C08b23698B3D3cc7Ca32193d9955 10] finalized=[0x14dC79964da2C08b23698B3D3cc7Ca32193d9955 10]
+  zone-2: 2026-11-15T02:44:06.869787Z  INFO zone::role: Leader generation started generation=10 epoch=10
+=== round 10 mode=window A=zone-2 B=zone-0 relay=zone-1
+  mode=window target=0x14dC79964da2C08b23698B3D3cc7Ca32193d9955
+02:44:15.334 pre latest=[0x14dC79964da2C08b23698B3D3cc7Ca32193d9955 10] finalized=[0x14dC79964da2C08b23698B3D3cc7Ca32193d9955 10] blk=442
+02:44:15.663 admin setLeader(0x9965507D1a55bcC2695C58ba16FB37d819B0A4dc,10) tx=0xc8e24ee9a78cc527888fd965fe7fb3cc89a5317f6ff5673531c33c123b23447e
+02:44:15.908 receipt status=0x1 block=0x1bb
+02:44:15.972 relay-reply {"status":"alreadyActive","relayer":"0x976ea74026e726554db657fa54763abd0c3a0aa9","requestedLeader":"0x14dc79964da2c08b23698b3d3cc7ca32193d9955"}
+02:44:15.971 during finalized=[0x14dC79964da2C08b23698B3D3cc7Ca32193d9955 10] latest=[0x9965507D1a55bcC2695C58ba16FB37d819B0A4dc 11] finblk=434
+02:44:16.201 admin receipt {"status":"0x1","blockNumber":"0x1bb"}
+02:44:28.232 post latest=[0x9965507D1a55bcC2695C58ba16FB37d819B0A4dc 11] finalized=[0x9965507D1a55bcC2695C58ba16FB37d819B0A4dc 11]
+  zone-0: 2026-11-15T02:44:20.367671Z  INFO zone::role: Leader generation started generation=11 epoch=11
